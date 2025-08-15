@@ -1,0 +1,494 @@
+
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auto Refresh Keep-Alive System</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+            color: #00ff41;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 10;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        .status-panel {
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #00ff41;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.3);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-item {
+            background: rgba(0, 255, 65, 0.1);
+            border: 1px solid #00ff41;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        .activity-log {
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #00ff41;
+            padding: 15px;
+            height: 200px;
+            overflow-y: auto;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .matrix-rain {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .matrix-column {
+            position: absolute;
+            top: -100vh;
+            color: #00ff41;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            animation: matrixFall linear infinite;
+        }
+
+        @keyframes glow {
+            from { text-shadow: 0 0 5px #00ff41, 0 0 10px #00ff41, 0 0 15px #00ff41; }
+            to { text-shadow: 0 0 10px #00ff41, 0 0 20px #00ff41, 0 0 30px #00ff41; }
+        }
+
+        @keyframes matrixFall {
+            to { transform: translateY(100vh); }
+        }
+
+        .refresh-indicator {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 0, 0, 0.8);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-weight: bold;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .invisible-elements {
+            position: absolute;
+            left: -9999px;
+            top: -9999px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Matrix Rain Background -->
+    <div class="matrix-rain" id="matrixRain"></div>
+
+    <!-- Refresh Indicator -->
+    <div class="refresh-indicator" id="refreshIndicator">
+        🔄 Auto Refresh Active
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <h1>🤖 AUTO REFRESH KEEP-ALIVE SYSTEM 🤖</h1>
+            <p>ระบบรีเฟรชอัตโนมัติและจำลองการใช้งานของ User</p>
+        </div>
+
+        <div class="status-panel">
+            <h3>📊 System Status</h3>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div>⏰ Uptime</div>
+                    <div id="uptime">0s</div>
+                </div>
+                <div class="stat-item">
+                    <div>🔄 Refresh Count</div>
+                    <div id="refreshCount">0</div>
+                </div>
+                <div class="stat-item">
+                    <div>🖱️ Mouse Actions</div>
+                    <div id="mouseActions">0</div>
+                </div>
+                <div class="stat-item">
+                    <div>⌨️ Key Presses</div>
+                    <div id="keyPresses">0</div>
+                </div>
+                <div class="stat-item">
+                    <div>📱 Current Agent</div>
+                    <div id="currentAgent" style="font-size: 10px;">Loading...</div>
+                </div>
+                <div class="stat-item">
+                    <div>🌐 Network Requests</div>
+                    <div id="networkRequests">0</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="status-panel">
+            <h3>📝 Activity Log</h3>
+            <div class="activity-log" id="activityLog">
+                [SYSTEM] Auto Refresh System initialized...<br>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Elements for User Simulation -->
+    <div class="invisible-elements">
+        <input type="text" id="hiddenInput" />
+        <textarea id="hiddenTextarea"></textarea>
+        <select id="hiddenSelect">
+            <option value="1">Option 1</option>
+            <option value="2">Option 2</option>
+            <option value="3">Option 3</option>
+        </select>
+        <button id="hiddenButton">Hidden Button</button>
+        <form id="hiddenForm">
+            <input type="submit" id="hiddenSubmit" />
+        </form>
+        <canvas id="hiddenCanvas" width="100" height="100"></canvas>
+    </div>
+
+    <script>
+        // กำหนดตัวแปรสถิติ
+        let stats = {
+            startTime: Date.now(),
+            refreshCount: parseInt(localStorage.getItem('refreshCount') || '0'),
+            mouseActions: parseInt(localStorage.getItem('mouseActions') || '0'),
+            keyPresses: parseInt(localStorage.getItem('keyPresses') || '0'),
+            networkRequests: parseInt(localStorage.getItem('networkRequests') || '0')
+        };
+
+        // User Agents สำหรับสุ่ม
+        const userAgents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:121.0) Gecko/20100101 Firefox/121.0',
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (X11; Linux x86_64; rv:121.0) Gecko/20100101 Firefox/121.0',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/120.0.0.0',
+            'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1',
+            'Mozilla/5.0 (iPad; CPU OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1',
+            'Mozilla/5.0 (Android 14; Mobile; rv:121.0) Gecko/121.0 Firefox/121.0'
+        ];
+
+        // ฟังก์ชันเพิ่มข้อความใน Activity Log
+        function addLog(message) {
+            const log = document.getElementById('activityLog');
+            const timestamp = new Date().toLocaleTimeString();
+            log.innerHTML += `[${timestamp}] ${message}<br>`;
+            log.scrollTop = log.scrollHeight;
+            
+            // จำกัดจำนวนบรรทัด
+            const lines = log.innerHTML.split('<br>');
+            if (lines.length > 50) {
+                log.innerHTML = lines.slice(-50).join('<br>');
+            }
+        }
+
+        // ฟังก์ชันอัพเดทสถิติ
+        function updateStats() {
+            const uptime = Math.floor((Date.now() - stats.startTime) / 1000);
+            document.getElementById('uptime').textContent = uptime + 's';
+            document.getElementById('refreshCount').textContent = stats.refreshCount;
+            document.getElementById('mouseActions').textContent = stats.mouseActions;
+            document.getElementById('keyPresses').textContent = stats.keyPresses;
+            document.getElementById('networkRequests').textContent = stats.networkRequests;
+            
+            // อัพเดท localStorage
+            localStorage.setItem('refreshCount', stats.refreshCount);
+            localStorage.setItem('mouseActions', stats.mouseActions);
+            localStorage.setItem('keyPresses', stats.keyPresses);
+            localStorage.setItem('networkRequests', stats.networkRequests);
+        }
+
+        // ฟังก์ชันจำลองการเคลื่อนไหวของเมาส์
+        function simulateMouseMovement() {
+            const mouseEvent = new MouseEvent('mousemove', {
+                clientX: Math.random() * window.innerWidth,
+                clientY: Math.random() * window.innerHeight,
+                bubbles: true
+            });
+            document.dispatchEvent(mouseEvent);
+            stats.mouseActions++;
+            addLog(`🖱️ Mouse moved to (${Math.floor(mouseEvent.clientX)}, ${Math.floor(mouseEvent.clientY)})`);
+        }
+
+        // ฟังก์ชันจำลองการคลิก
+        function simulateClick() {
+            const elements = document.querySelectorAll('button, a, input, select, textarea');
+            if (elements.length > 0) {
+                const randomElement = elements[Math.floor(Math.random() * elements.length)];
+                const clickEvent = new MouseEvent('click', { bubbles: true });
+                randomElement.dispatchEvent(clickEvent);
+                stats.mouseActions++;
+                addLog(`🖱️ Clicked on ${randomElement.tagName} element`);
+            }
+        }
+
+        // ฟังก์ชันจำลองการพิมพ์
+        function simulateKeyPress() {
+            const keys = 'abcdefghijklmnopqrstuvwxyz0123456789';
+            const randomKey = keys[Math.floor(Math.random() * keys.length)];
+            
+            const keyEvent = new KeyboardEvent('keydown', {
+                key: randomKey,
+                code: `Key${randomKey.toUpperCase()}`,
+                bubbles: true
+            });
+            
+            const hiddenInput = document.getElementById('hiddenInput');
+            hiddenInput.focus();
+            hiddenInput.dispatchEvent(keyEvent);
+            hiddenInput.value += randomKey;
+            
+            stats.keyPresses++;
+            addLog(`⌨️ Key pressed: ${randomKey.toUpperCase()}`);
+        }
+
+        // ฟังก์ชันจำลองการเลื่อนหน้า
+        function simulateScroll() {
+            const scrollAmount = Math.random() * 500 - 250; // -250 to 250
+            window.scrollBy(0, scrollAmount);
+            stats.mouseActions++;
+            addLog(`📜 Scrolled ${scrollAmount > 0 ? 'down' : 'up'} by ${Math.abs(Math.floor(scrollAmount))}px`);
+        }
+
+        // ฟังก์ชันสร้าง Network Requests
+        function makeNetworkRequests() {
+            const endpoints = [
+                '/api/health',
+                '/api/status',
+                '/api/ping',
+                '/',
+                '/favicon.ico',
+                '/robots.txt'
+            ];
+            
+            const randomEndpoint = endpoints[Math.floor(Math.random() * endpoints.length)];
+            
+            fetch(randomEndpoint, {
+                method: Math.random() > 0.8 ? 'HEAD' : 'GET',
+                cache: 'no-cache'
+            }).then(response => {
+                stats.networkRequests++;
+                addLog(`🌐 Request to ${randomEndpoint} - ${response.status}`);
+            }).catch(error => {
+                stats.networkRequests++;
+                addLog(`🌐 Request to ${randomEndpoint} - Failed`);
+            });
+        }
+
+        // ฟังก์ชันสุ่ม User Agent
+        function changeUserAgent() {
+            const randomAgent = userAgents[Math.floor(Math.random() * userAgents.length)];
+            
+            // แสดง User Agent ปัจจุบัน (ตัดให้สั้น)
+            const shortAgent = randomAgent.length > 50 ? 
+                randomAgent.substring(0, 47) + '...' : randomAgent;
+            document.getElementById('currentAgent').textContent = shortAgent;
+            
+            addLog(`🤖 User Agent changed`);
+            
+            // พยายามเปลี่ยน User Agent (บางเบราว์เซอร์อาจไม่อนุญาต)
+            try {
+                Object.defineProperty(navigator, 'userAgent', {
+                    get: function() { return randomAgent; },
+                    configurable: true
+                });
+            } catch (e) {
+                // ไม่สามารถเปลี่ยนได้ในบางเบราว์เซอร์
+            }
+        }
+
+        // ฟังก์ชันสร้าง Matrix Rain Effect
+        function createMatrixRain() {
+            const matrixRain = document.getElementById('matrixRain');
+            const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@#$%^&*()';
+            
+            for (let i = 0; i < 20; i++) {
+                const column = document.createElement('div');
+                column.className = 'matrix-column';
+                column.style.left = `${i * 5}%`;
+                column.style.animationDuration = `${3 + Math.random() * 3}s`;
+                column.style.animationDelay = `${Math.random() * 2}s`;
+                
+                let text = '';
+                for (let j = 0; j < 20; j++) {
+                    text += chars[Math.floor(Math.random() * chars.length)] + '<br>';
+                }
+                column.innerHTML = text;
+                matrixRain.appendChild(column);
+            }
+        }
+
+        // ฟังก์ชันรีเฟรชหน้า
+        function autoRefresh() {
+            stats.refreshCount++;
+            addLog(`🔄 Page will refresh in 3 seconds... (Refresh #${stats.refreshCount})`);
+            
+            setTimeout(() => {
+                location.reload();
+            }, 3000);
+        }
+
+        // ฟังก์ชันจำลองกิจกรรมของ User แบบสุ่ม
+        function randomUserActivity() {
+            const activities = [
+                simulateMouseMovement,
+                simulateClick,
+                simulateKeyPress,
+                simulateScroll,
+                makeNetworkRequests
+            ];
+            
+            const randomActivity = activities[Math.floor(Math.random() * activities.length)];
+            randomActivity();
+        }
+
+        // เริ่มต้นระบบ
+        function initializeSystem() {
+            addLog('🚀 Auto Refresh System starting...');
+            
+            // สร้าง Matrix Effect
+            createMatrixRain();
+            
+            // เปลี่ยน User Agent ครั้งแรก
+            changeUserAgent();
+            
+            // อัพเดทสถิติทุก 1 วินาที
+            setInterval(updateStats, 1000);
+            
+            // กิจกรรมผู้ใช้แบบสุ่มทุก 2-5 วินาที
+            setInterval(randomUserActivity, 2000 + Math.random() * 3000);
+            
+            // เปลี่ยน User Agent ทุก 10-30 วินาที
+            setInterval(changeUserAgent, 10000 + Math.random() * 20000);
+            
+            // ส่ง Network Request ทุก 3-8 วินาที
+            setInterval(makeNetworkRequests, 3000 + Math.random() * 5000);
+            
+            // รีเฟรชหน้าทุก 30-60 วินาที
+            const refreshInterval = 30000 + Math.random() * 30000; // 30-60 วินาที
+            addLog(`⏰ Next refresh scheduled in ${Math.floor(refreshInterval/1000)} seconds`);
+            setTimeout(autoRefresh, refreshInterval);
+            
+            addLog('✅ Auto Refresh System fully operational!');
+        }
+
+        // Event Listeners สำหรับจับการเคลื่อนไหวจริง
+        document.addEventListener('mousemove', () => {
+            // บันทึกการเคลื่อนไหวเมาส์จริง
+        });
+
+        document.addEventListener('keydown', () => {
+            // บันทึกการกดคีย์จริง
+        });
+
+        // เริ่มระบบเมื่อหน้าโหลดเสร็จ
+        document.addEventListener('DOMContentLoaded', initializeSystem);
+
+        // ป้องกันการปิดหน้าโดยไม่ได้ตั้งใจ
+        window.addEventListener('beforeunload', function(e) {
+            const message = 'Auto Refresh System is running. Are you sure you want to leave?';
+            e.preventDefault();
+            e.returnValue = message;
+            return message;
+        });
+
+        // เพิ่มความสมจริงด้วย Visibility API
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                addLog('👁️ Tab became hidden');
+            } else {
+                addLog('👁️ Tab became visible');
+            }
+        });
+
+        // จำลอง Web Worker activity
+        if (typeof Worker !== 'undefined') {
+            const workerCode = `
+                setInterval(() => {
+                    self.postMessage({type: 'keepalive', timestamp: Date.now()});
+                }, 5000);
+            `;
+            
+            const blob = new Blob([workerCode], {type: 'application/javascript'});
+            const worker = new Worker(URL.createObjectURL(blob));
+            
+            worker.onmessage = function(e) {
+                if (e.data.type === 'keepalive') {
+                    addLog('👷 Background worker active');
+                }
+            };
+        }
+
+        // Service Worker registration for additional keep-alive
+        if ('serviceWorker' in navigator) {
+            const swCode = `
+                self.addEventListener('message', function(e) {
+                    if (e.data.type === 'KEEP_ALIVE') {
+                        e.ports[0].postMessage({status: 'alive'});
+                    }
+                });
+            `;
+            
+            const blob = new Blob([swCode], {type: 'application/javascript'});
+            const swUrl = URL.createObjectURL(blob);
+            
+            navigator.serviceWorker.register(swUrl).then(registration => {
+                addLog('🔧 Service Worker registered');
+                
+                // ส่งข้อความไปยัง Service Worker เป็นระยะ
+                setInterval(() => {
+                    if (registration.active) {
+                        const messageChannel = new MessageChannel();
+                        messageChannel.port1.onmessage = function(e) {
+                            addLog('🔧 Service Worker responded');
+                        };
+                        registration.active.postMessage({type: 'KEEP_ALIVE'}, [messageChannel.port2]);
+                    }
+                }, 15000);
+            }).catch(err => {
+                addLog('❌ Service Worker registration failed');
+            });
+        }
+    </script>
+</body>
+</html>
