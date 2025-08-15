@@ -1,0 +1,11 @@
+{
+  "maxConcurrentProcesses": 3,
+  "defaultVideoQuality": "720",
+  "emailNotifications": false,
+  "maxFileSize": 30,
+  "rateLimitPerIP": 50,
+  "maxProcessingTime": 10,
+  "enableIPWhitelist": false,
+  "blockSuspiciousActivity": false,
+  "sessionTimeout": 30
+}

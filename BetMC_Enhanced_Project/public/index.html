@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+  <title>BetMC Texture Generator Pro</title>
+  
+  <!--
+  ========================================================================================
+  BetMC TEXTURE GENERATOR PRO - ENHANCED VERSION
+  ========================================================================================
+  
+  🚀 ENHANCED FEATURES ADDED:
+  
+  1. 🔍 REAL-TIME SEARCH SYSTEM
+     - ค้นหาฟังก์ชันและการตั้งค่าแบบ Real-time
+     - กรองผลลัพธ์ตามหมวดหมู่ (ทั้งหมด, การตั้งค่า, สื่อ, ตัวเลือก)
+     - ไฮไลท์และนำทางไปยังองค์ประกอบที่ค้นหา
+     - แสดงคำแนะนำการค้นหา
+  
+  2. 🌙 DARK/LIGHT MODE TOGGLE
+     - เปลี่ยนธีมระหว่างโหมดมืดและสว่าง
+     - บันทึกการตั้งค่าผู้ใช้ใน localStorage
+     - ปรับธีมอัตโนมัติตามการตั้งค่าระบบ
+     - อนิเมชั่นการเปลี่ยนธีมที่นุ่มนวล
+  
+  3. 🔔 NOTIFICATION SYSTEM
+     - การแจ้งเตือนแบบ Real-time
+     - ประเภทการแจ้งเตือน: สำเร็จ, ข้อผิดพลาด, คำเตือน, ข้อมูล
+     - การแจ้งเตือนเมื่อมีข้อมูลใหม่
+     - ความคืบหน้าการประมวลผล
+  
+  4. 🎨 ENHANCED UI & UX
+     - การออกแบบ Glassmorphism ที่ทันสมัย
+     - อนิเมชั่นและเอฟเฟกต์ที่นุ่มนวล
+     - การตอบสนองที่ดีขึ้นสำหรับมือถือ
+     - ปรับปรุง Typography และ Spacing
+  
+  5. 📁 ENHANCED FILE HANDLING
+     - ระบบ Drag & Drop ที่ปรับปรุงแล้ว
+     - การตรวจสอบประเภทและขนาดไฟล์
+     - พรีวิววิดีโอและรูปภาพ
+     - การแสดงข้อมูลไฟล์ที่ละเอียด
+  
+  6. ⚡ PERFORMANCE IMPROVEMENTS
+     - การโหลดแบบ Lazy Loading
+     - การเพิ่มประสิทธิภาพ CSS และ JavaScript
+     - การจัดการหน่วยความจำที่ดีขึ้น
+  
+  7. 🔧 ACCESSIBILITY ENHANCEMENTS
+     - รองรับ Screen Readers
+     - การนำทางด้วยแป้นพิมพ์
+     - Focus States ที่ชัดเจน
+     - รองรับ Reduced Motion
+  
+  ========================================================================================
+  TECHNICAL IMPLEMENTATION:
+  
+  Frontend Technologies:
+  - HTML5 Semantic Elements
+  - CSS3 with Custom Properties
+  - Vanilla JavaScript ES6+
+  - Socket.IO for Real-time Communication
+  
+  Backend Integration:
+  - Node.js/Express Server
+  - Real-time Notifications
+  - File Processing Monitoring
+  - Performance Tracking
+  
+  Browser Compatibility:
+  - Chrome 80+, Firefox 75+, Safari 13+, Edge 80+
+  - Mobile: iOS Safari 13+, Chrome Mobile 80+
+  
+  ========================================================================================
+  -->
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Particles Background -->
+  <div id="particles-container"></div>
+  
+  <!-- Background Elements -->
+  <div class="bg-blur"></div>
+  <div class="bg-overlay"></div>
+
+  <!-- Announcement Banner -->
+  <div id="announcement-banner" class="announcement-banner" style="display: none;">
+    <div class="announcement-content">
+      <i class="fas fa-bullhorn"></i>
+      <span id="announcement-text"></span>
+      <button id="close-announcement" class="close-announcement">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Admin Access Button -->
+  <div class="admin-access">
+    <button id="admin-btn" class="admin-btn" title="Admin Access">
+      <i class="fas fa-cog"></i>
+    </button>
+  </div>
+
+  <!-- Search and Theme Controls -->
+  <div class="top-controls">
+    <!-- Real-time Search Bar -->
+    <div class="search-container">
+      <div class="search-input-wrapper">
+        <i class="fas fa-search search-icon"></i>
+        <input type="text" id="global-search" placeholder="ค้นหาฟังก์ชัน, การตั้งค่า, หรือข้อมูล..." class="search-input">
+        <button id="clear-search" class="clear-search" style="display: none;">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="search-filters">
+        <button class="filter-btn active" data-filter="all">
+          <i class="fas fa-list"></i> ทั้งหมด
+        </button>
+        <button class="filter-btn" data-filter="settings">
+          <i class="fas fa-cog"></i> การตั้งค่า
+        </button>
+        <button class="filter-btn" data-filter="media">
+          <i class="fas fa-video"></i> สื่อ
+        </button>
+        <button class="filter-btn" data-filter="options">
+          <i class="fas fa-sliders-h"></i> ตัวเลือก
+        </button>
+      </div>
+      <div id="search-results" class="search-results" style="display: none;"></div>
+    </div>
+
+    <!-- Theme Toggle -->
+    <div class="theme-toggle-container">
+      <button id="theme-toggle" class="theme-toggle" title="เปลี่ยนธีม">
+        <div class="theme-toggle-track">
+          <div class="theme-toggle-thumb">
+            <i class="fas fa-sun sun-icon"></i>
+            <i class="fas fa-moon moon-icon"></i>
+          </div>
+        </div>
+      </button>
+      <span class="theme-label">โหมดมืด</span>
+    </div>
+  </div>
+
+  <!-- Notification System -->
+  <div id="notification-container" class="notification-container"></div>
+
+  <!-- Main Container -->
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h1 class="glitch-text" data-text="BetMC Texture Generator">BetMC Texture Generator</h1>
+      <p>สร้าง Texture Pack สำหรับ Minecraft ได้ง่ายๆ ด้วยเทคโนโลยี AI</p>
+      <div class="version-badge floating">
+        <i class="fas fa-star"></i> Version 3.0 Pro
+      </div>
+    </div>
+
+    <!-- GIF Preview -->
+    <div class="gif-wrapper">
+      <img id="preview-gif" src="https://media.tenor.com/XQu4UfesS_kAAAAC/minecraft-block.gif" alt="Minecraft Animation" class="floating-animation" loading="lazy" decoding="async" fetchpriority="low">
+    </div>
+
+    <!-- Upload Form -->
+    <form id="upload-form" enctype="multipart/form-data">
+      <div class="form-grid">
+        <!-- Texture Name -->
+        <div class="form-group full-width">
+          <label for="textureName">
+            <i class="fas fa-palette"></i>
+            ชื่อ Texture Pack
+          </label>
+          <input type="text" id="textureName" name="textureName" placeholder="ใส่ชื่อ Texture Pack ของคุณ" class="input-glow">
+        </div>
+
+        <!-- Email -->
+        <div class="form-group">
+          <label for="email">
+            <i class="fas fa-envelope"></i>
+            อีเมล (เพื่อรับการแจ้งเตือน)
+          </label>
+          <input type="email" id="email" name="email" placeholder="your@email.com" class="input-glow">
+        </div>
+
+        <!-- FPS -->
+        <div class="form-group">
+          <label for="fps">
+            <i class="fas fa-film"></i>
+            FPS (เฟรมต่อวินาที)
+          </label>
+          <input type="number" id="fps" name="fps" value="30" min="10" max="60" class="input-glow">
+        </div>
+
+        <!-- Quality -->
+        <div class="form-group">
+          <label for="quality">
+            <i class="fas fa-adjust"></i>
+            คุณภาพภาพ (%)
+          </label>
+          <input type="number" id="quality" name="quality" value="75" min="30" max="100" class="input-glow">
+        </div>
+      </div>
+
+      <!-- YouTube Section -->
+      <div id="youtube-section" class="youtube-section">
+        <h3><i class="fab fa-youtube"></i> YouTube Video</h3>
+        <div class="youtube-input-group">
+          <div class="form-group youtube-input">
+            <input type="text" id="youtubeUrl" placeholder="วาง URL YouTube ที่นี่..." class="input-glow">
+          </div>
+          <button type="button" id="loadYoutube" class="youtube-btn">
+            <i class="fas fa-download"></i> โหลด
+          </button>
+        </div>
+        
+        <div class="youtube-options">
+          <div class="youtube-quality-select">
+            <label for="youtubeQuality">คุณภาพ:</label>
+            <select id="youtubeQuality" name="youtubeQuality">
+              <option value="480">480p (ปกติ)</option>
+              <option value="720">720p HD (ดี)</option>
+              <option value="1080" selected>1080p Full HD (ดีที่สุด)</option>
+              <option value="best">คุณภาพสูงสุดที่มี (4K/1440p)</option>
+            </select>
+            <small style="color: #8e9aaf; margin-top: 5px; display: block;">
+              💡 เลือก "คุณภาพสูงสุดที่มี" สำหรับภาพชัดสุด
+            </small>
+          </div>
+          
+          <div class="youtube-audio-checkbox">
+            <input type="checkbox" id="useYoutubeAudio" name="useYoutubeAudio">
+            <label for="useYoutubeAudio">ใช้เสียงจากวิดีโอนี้</label>
+          </div>
+        </div>
+
+        <div class="youtube-preview" id="youtubePreview">
+          <img id="youtubeThumbnail" class="youtube-thumbnail" alt="YouTube Thumbnail" loading="lazy" decoding="async">
+          <div class="youtube-info">
+            <h4 id="youtubeTitle"></h4>
+            <p id="youtubeDuration"></p>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="youtubeAudioUrl">
+            <i class="fas fa-music"></i>
+            YouTube Audio แยกต่างหาก (ถ้ามี)
+          </label>
+          <input type="text" id="youtubeAudioUrl" placeholder="URL เสียงจาก YouTube อื่น..." class="input-glow">
+        </div>
+      </div>
+
+      <!-- TikTok Section -->
+      <div id="tiktok-section" class="youtube-section">
+        <h3><i class="fab fa-tiktok"></i> TikTok Video</h3>
+        <div class="youtube-input-group">
+          <div class="form-group youtube-input">
+            <input type="text" id="tiktokUrl" placeholder="วาง URL TikTok ที่นี่..." class="input-glow">
+          </div>
+          <button type="button" id="loadTiktok" class="youtube-btn tiktok-btn">
+            <i class="fas fa-download"></i> โหลด
+          </button>
+        </div>
+        
+        <div class="youtube-options">
+          <div class="youtube-quality-select">
+            <label for="tiktokQuality">คุณภาพ:</label>
+            <select id="tiktokQuality" name="tiktokQuality">
+              <option value="best" selected>ดีที่สุด (ไม่มี Watermark)</option>
+              <option value="high">สูง (อาจมี Watermark)</option>
+              <option value="medium">ปานกลาง</option>
+              <option value="low">ต่ำ (ขนาดเล็ก)</option>
+            </select>
+            <small style="color: #8e9aaf; margin-top: 5px; display: block;">
+              💡 "ดีที่สุด" จะพยายามหลีกเลี่ยง TikTok watermark
+            </small>
+          </div>
+          
+          <div class="youtube-audio-checkbox">
+            <input type="checkbox" id="useTiktokAudio" name="useTiktokAudio">
+            <label for="useTiktokAudio">ใช้เสียงจากวิดีโอนี้</label>
+          </div>
+        </div>
+
+        <div class="youtube-preview" id="tiktokPreview">
+          <img id="tiktokThumbnail" class="youtube-thumbnail" alt="TikTok Thumbnail" loading="lazy" decoding="async">
+          <div class="youtube-info">
+            <h4 id="tiktokTitle"></h4>
+            <p id="tiktokDuration"></p>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="tiktokAudioUrl">
+            <i class="fas fa-music"></i>
+            TikTok Audio แยกต่างหาก (ถ้ามี)
+          </label>
+          <input type="text" id="tiktokAudioUrl" placeholder="URL เสียงจาก TikTok อื่น..." class="input-glow">
+        </div>
+      </div>
+
+      <!-- File Upload Section -->
+      <div id="upload-section" class="upload-section">
+        <div class="form-grid">
+          <!-- Video Upload -->
+          <div class="form-group">
+            <label>
+              <i class="fas fa-video"></i>
+              ไฟล์วิดีโอ
+            </label>
+            <div class="file-input-wrapper">
+              <input type="file" id="video" name="video" accept="video/*">
+              <div class="file-input-display" id="videoDisplay">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <div class="upload-text">อัปโหลดไฟล์วิดีโอ</div>
+                <div class="upload-hint">MP4, AVI, MOV หรือรูปแบบอื่นๆ</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Audio Upload -->
+          <div class="form-group">
+            <label>
+              <i class="fas fa-music"></i>
+              ไฟล์เสียง (ถ้ามี)
+            </label>
+            <div class="file-input-wrapper">
+              <input type="file" id="audio" name="audio" accept="audio/*">
+              <div class="file-input-display" id="audioDisplay">
+                <i class="fas fa-music"></i>
+                <div class="upload-text">อัปโหลดไฟล์เสียง</div>
+                <div class="upload-hint">MP3, WAV, OGG หรือรูปแบบอื่นๆ</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Icon Upload -->
+          <div class="form-group">
+            <label>
+              <i class="fas fa-image"></i>
+              ไอคอน Pack (ถ้ามี)
+            </label>
+            <div class="file-input-wrapper">
+              <input type="file" id="icon" name="icon" accept="image/*">
+              <div class="file-input-display" id="iconDisplay">
+                <i class="fas fa-image"></i>
+                <div class="upload-text">อัปโหลดไอคอน</div>
+                <div class="upload-hint">PNG, JPG (แนะนำ 128x128px)</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Submit Button -->
+      <button type="submit" id="submitBtn" class="submit-btn pulse-animation">
+        <i class="fas fa-magic"></i>
+        สร้าง Texture Pack
+      </button>
+    </form>
+
+    <!-- Video Preview -->
+    <div id="videoPreview" class="video-preview" style="display: none;">
+      <video id="previewVideo" controls preload="metadata"></video>
+      <div class="video-info">
+        <div class="info-row">
+          <span class="info-label"><i class="fas fa-file-video"></i> ชื่อไฟล์:</span>
+          <span class="info-value" id="fileName"></span>
+        </div>
+        <div class="info-row">
+          <span class="info-label"><i class="fas fa-clock"></i> ระยะเวลา:</span>
+          <span class="info-value" id="duration"></span>
+        </div>
+        <div class="info-row">
+          <span class="info-label"><i class="fas fa-expand"></i> ขนาด:</span>
+          <span class="info-value" id="dimensions"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Progress Modal -->
+  <div id="progressModal" class="modal">
+    <div class="modal-content">
+      <div class="progress-header">
+        <h3><i class="fas fa-cogs"></i> กำลังประมวลผล...</h3>
+        <div class="progress-stats">
+          <span id="currentStep">ขั้นตอนที่ 1</span>
+          <span id="timeLeft"></span>
+        </div>
+      </div>
+      
+      <div class="progress-container">
+        <div class="progress-bar">
+          <div id="progressFill" class="progress-fill"></div>
+        </div>
+        <div class="progress-text">
+          <span id="progressPercent">0%</span>
+        </div>
+      </div>
+      
+      <div class="progress-message">
+        <p id="progressMessage">เริ่มต้นการประมวลผล...</p>
+      </div>
+
+      <div class="progress-steps">
+        <div class="step" data-step="1"><i class="fas fa-play"></i></div>
+        <div class="step" data-step="2"><i class="fas fa-download"></i></div>
+        <div class="step" data-step="3"><i class="fas fa-film"></i></div>
+        <div class="step" data-step="4"><i class="fas fa-compress"></i></div>
+        <div class="step" data-step="5"><i class="fas fa-folder"></i></div>
+        <div class="step" data-step="6"><i class="fas fa-file-code"></i></div>
+        <div class="step" data-step="7"><i class="fas fa-volume-up"></i></div>
+        <div class="step" data-step="8"><i class="fas fa-archive"></i></div>
+        <div class="step" data-step="9"><i class="fas fa-music"></i></div>
+        <div class="step" data-step="10"><i class="fas fa-image"></i></div>
+        <div class="step" data-step="11"><i class="fas fa-file-archive"></i></div>
+        <div class="step" data-step="12"><i class="fas fa-trash"></i></div>
+        <div class="step" data-step="13"><i class="fas fa-check"></i></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Success Modal -->
+  <div id="successModal" class="modal">
+    <div class="modal-content success-modal">
+      <div class="success-header">
+        <div class="success-icon">
+          <i class="fas fa-check-circle"></i>
+        </div>
+        <h3>เสร็จสิ้น!</h3>
+        <p>Texture Pack ของคุณพร้อมแล้ว</p>
+      </div>
+      
+      <div class="download-info">
+        <h4 id="downloadTextureName"></h4>
+        <p>ไฟล์พร้อมดาวน์โหลดแล้ว</p>
+      </div>
+
+      <div class="modal-actions">
+        <a id="downloadBtn" href="#" class="btn btn-primary" download>
+          <i class="fas fa-download"></i>
+          ดาวน์โหลด
+        </a>
+        <button id="closeSuccess" class="btn btn-secondary">
+          <i class="fas fa-times"></i>
+          ปิด
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notifications -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Chat Banner (แบบประกาศ) -->
+  <div id="chatBanner" class="chat-banner" style="display: none;">
+    <div class="chat-banner-content">
+      <i class="fas fa-comment-alt chat-icon"></i>
+      <div class="chat-text">
+        <div class="chat-sender">Admin</div>
+        <div id="chatMessage" class="chat-message-text"></div>
+      </div>
+      <button id="closeChatBanner" class="close-chat-banner">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Bottom Media Player (ด้านล่างสุดของหน้า) -->
+  <div id="bottomMediaPlayer" class="bottom-media-player" style="display: none;">
+    <div class="bottom-media-container">
+      <div class="bottom-media-header">
+        <div class="media-info-left">
+          <i class="fas fa-play-circle"></i>
+          <span id="bottomMediaTitle">Admin กำลังเล่นมีเดีย</span>
+        </div>
+        <div class="media-controls-right">
+          <button id="toggleBottomVolume" class="bottom-control-btn">
+            <i class="fas fa-volume-up"></i>
+          </button>
+          <span id="bottomVolumeLevel">50%</span>
+          <button id="closeBottomMedia" class="bottom-control-btn">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+      <div class="bottom-media-content">
+        <div id="bottomVideoPlayer" style="display: none;">
+          <iframe id="bottomVideoFrame" width="100%" height="400" frameborder="0" allowfullscreen allow="autoplay" loading="lazy" referrerpolicy="no-referrer"></iframe>
+        </div>
+        <div id="bottomAudioPlayer" style="display: none;">
+          <audio id="bottomAudioElement" controls autoplay style="width: 100%;">
+            <source id="bottomAudioSource" src="" type="audio/mpeg">
+          </audio>
+        </div>
+        <div id="bottomFilePlayer" style="display: none;">
+          <video id="bottomFileVideo" controls autoplay style="width: 100%; max-height: 400px;">
+            <source id="bottomFileSource" src="" type="video/mp4">
+          </video>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Media Player -->
+  <div id="mediaPlayer" class="media-player" style="display: none;">
+    <div class="media-content">
+      <div id="backgroundVideo" style="display: none;"></div>
+      <audio id="backgroundAudio" style="display: none;" loop></audio>
+    </div>
+    <div class="media-controls-overlay">
+      <button id="mediaToggle" class="media-control-btn">
+        <i class="fas fa-volume-mute"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="/socket.io/socket.io.js" defer></script>
+  <script src="particles.js" defer></script>
+  <script src="script.js" defer></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js').catch(function(){});
+      });
+    }
+  </script>
+</body>
+</html>
