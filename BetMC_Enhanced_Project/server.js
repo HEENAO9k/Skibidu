@@ -2436,12 +2436,30 @@ app.use((req, res, next) => {
   next();
 });
 
-const PORT = 5000;
-server.listen(PORT, '0.0.0.0', () => {
+const PORT = process.env.PORT || 5000;
+const HOST = '0.0.0.0'; // เปิดให้เข้าถึงจากภายนอกได้
+
+server.listen(PORT, HOST, () => {
   console.log(`🚀 BetMC Texture Generator Pro running on port ${PORT}`);
-  console.log(`🌐 Access at: http://localhost:${PORT}`);
+  console.log(`🌐 Local: http://localhost:${PORT}`);
+  console.log(`🌍 Network: http://0.0.0.0:${PORT}`);
   console.log(`📊 System monitoring active - all console output will be sent to admin mode`);
-  addErrorLog('success', `🚀 เซิร์ฟเวอร์เริ่มทำงานแล้ว - พอร์ต ${PORT}`);
+  
+  // แสดง IP Address ของเครื่อง
+  const os = require('os');
+  const interfaces = os.networkInterfaces();
+  console.log(`\n📡 Access from other devices:`);
+  
+  Object.keys(interfaces).forEach((name) => {
+    interfaces[name].forEach((iface) => {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        console.log(`   http://${iface.address}:${PORT}`);
+      }
+    });
+  });
+  
+  console.log(`\n🔗 Share this URL with others to let them access your site!`);
+  addErrorLog('success', `🚀 เซิร์ฟเวอร์เริ่มทำงานแล้ว - พอร์ต ${PORT} - เปิดให้เข้าถึงจากภายนอก`);
 });
 
 // ========================================================================================

@@ -45,8 +45,12 @@ if %ERRORLEVEL% NEQ 0 (
 
 echo.
 echo 🚀 เริ่มเซิร์ฟเวอร์...
-echo 🌐 URL: http://localhost:5000
+echo 🌐 URL สำหรับเครื่องนี้: http://localhost:5000
+echo 🌍 เปิดให้คนอื่นเข้าถึงได้แล้ว!
 echo 📱 กด Ctrl+C เพื่อหยุดเซิร์ฟเวอร์
+echo.
+echo ⚠️  หมายเหตุ: ตรวจสอบ Firewall ของคุณ
+echo    Windows Defender อาจถามให้อนุญาต
 echo.
 
 node server.js
