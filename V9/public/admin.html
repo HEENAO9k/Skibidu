@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Panel - BetMC Texture Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <!-- Background -->
+  <div class="bg-blur"></div>
+  <div class="bg-overlay"></div>
+
+  <!-- Login Screen -->
+  <div id="login-screen" class="login-screen">
+    <div class="login-container">
+      <div class="login-header">
+        <i class="fas fa-shield-alt"></i>
+        <h2>Admin Access</h2>
+        <p>ใส่รหัสผ่านเพื่อเข้าสู่ระบบ</p>
+      </div>
+
+      <form id="login-form" action="#" onsubmit="return false;">
+        <div class="form-group">
+          <label for="password">
+            <i class="fas fa-lock"></i>
+            Password
+          </label>
+          <input type="password" id="password" name="password" placeholder="Enter admin password" required>
+        </div>
+
+        <button type="button" class="login-btn" onclick="handleLogin(event)">
+          <i class="fas fa-sign-in-alt"></i>
+          Login
+        </button>
+      </form>
+
+      <div class="back-to-main">
+        <a href="/" class="back-link">
+          <i class="fas fa-arrow-left"></i>
+          Back to Main
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin Panel -->
+  <div id="admin-panel" class="admin-panel" style="display: none;">
+    <!-- Admin Mode Badge -->
+    <div id="admin-badge" class="admin-mode-badge">
+      <div class="badge-content">
+        <i class="fas fa-shield-alt"></i>
+        <span class="admin-text">ADMIN MODE</span>
+        <div class="pulse-ring"></div>
+      </div>
+    </div>
+
+    <!-- Header -->
+    <div class="admin-header">
+      <div class="admin-title">
+        <h1><i class="fas fa-cogs"></i> Admin Control Panel</h1>
+        <p>Real-time system management</p>
+        <div class="admin-status-indicator">
+          <i class="fas fa-shield-alt"></i>
+          <span>Administrator Access Active</span>
+        </div>
+      </div>
+
+      <div class="admin-actions">
+        <!-- Edited: Theme toggle button for Dark/Light mode with icon-only style -->
+        <button id="adminThemeToggle" class="btn-icon" title="สลับโหมดแสง">
+          <i class="fas fa-moon"></i>
+        </button>
+        <button id="logout-btn" class="logout-btn">
+          <i class="fas fa-sign-out-alt"></i>
+          Logout
+        </button>
+      </div>
+    </div>
+
+    <!-- Control Grid -->
+    <div class="control-grid">
+      <!-- GIF Management -->
+      <div class="control-card">
+        <div class="card-header">
+          <h3><i class="fas fa-image"></i> GIF Management</h3>
+        </div>
+        <div class="card-content">
+          <div class="form-group">
+            <label for="gifUrl">GIF URL</label>
+            <input type="url" id="gifUrl" placeholder="Enter GIF URL">
+          </div>
+          <div class="preview-container">
+            <div class="gif-preview-wrapper">
+              <img id="gifPreview" src="" alt="GIF Preview" style="display: none;">
+              <div class="preview-placeholder" id="gifPlaceholder">
+                <i class="fas fa-image"></i>
+                <p>พิมพ์ URL เพื่อดูตัวอย่าง</p>
+              </div>
+            </div>
+          </div>
+          <button id="updateGif" class="btn btn-primary">
+            <i class="fas fa-sync"></i>
+            Update GIF
+          </button>
+        </div>
+      </div>
+
+      <!-- Color Theme -->
+      <div class="control-card">
+        <div class="card-header">
+          <h3><i class="fas fa-palette"></i> Color Theme</h3>
+        </div>
+        <div class="card-content">
+          <div class="color-grid">
+            <div class="form-group">
+              <label for="primaryColor">Primary Color</label>
+              <input type="color" id="primaryColor" value="#667eea">
+            </div>
+            <div class="form-group">
+              <label for="secondaryColor">Secondary Color</label>
+              <input type="color" id="secondaryColor" value="#764ba2">
+            </div>
+            <div class="form-group">
+              <label for="accentColor">Accent Color</label>
+              <input type="color" id="accentColor" value="#f093fb">
+            </div>
+          </div>
+          <button id="updateColors" class="btn btn-primary">
+            <i class="fas fa-paint-brush"></i>
+            Apply Colors
+          </button>
+        </div>
+      </div>
+
+      <!-- Real-time Analytics Dashboard -->
+      <div class="control-card analytics-card">
+        <div class="card-header">
+          <h3><i class="fas fa-chart-line"></i> Real-time Analytics</h3>
+          <div class="refresh-indicator">
+            <i class="fas fa-circle pulse-dot"></i>
+            <span>Live</span>
+          </div>
+        </div>
+        <div class="card-content">
+          <div class="analytics-grid">
+            <div class="metric-box">
+              <div class="metric-icon">
+                <i class="fas fa-users"></i>
+              </div>
+              <div class="metric-content">
+                <h4 id="totalUsersToday">0</h4>
+                <p>ผู้ใช้วันนี้</p>
+                <span class="trend up" id="userTrend">+0%</span>
+              </div>
+            </div>
+
+            <div class="metric-box">
+              <div class="metric-icon">
+                <i class="fas fa-download"></i>
+              </div>
+              <div class="metric-content">
+                <h4 id="totalDownloads">0</h4>
+                <p>ดาวน์โหลดทั้งหมด</p>
+                <span class="trend up" id="downloadTrend">+0%</span>
+              </div>
+            </div>
+
+            <div class="metric-box">
+              <div class="metric-icon">
+                <i class="fas fa-clock"></i>
+              </div>
+              <div class="metric-content">
+                <h4 id="avgProcessTime">0s</h4>
+                <p>เวลาประมวลผลเฉลี่ย</p>
+                <span class="trend down" id="timeTrend">-0%</span>
+              </div>
+            </div>
+
+            <div class="metric-box">
+              <div class="metric-icon">
+                <i class="fas fa-tachometer-alt"></i>
+              </div>
+              <div class="metric-content">
+                <h4 id="systemLoad">0%</h4>
+                <p>System Load</p>
+                <span class="trend" id="loadTrend">0%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Mini Charts -->
+          <div class="mini-charts">
+            <div class="chart-container">
+              <h5>การใช้งานรายชั่วโมง</h5>
+              <canvas id="hourlyChart" width="300" height="100"></canvas>
+            </div>
+            <div class="chart-container">
+              <h5>ประเภท Texture Pack</h5>
+              <canvas id="typeChart" width="300" height="100"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Active Users Monitor -->
+      <div class="control-card users-card">
+        <div class="card-header">
+          <h3><i class="fas fa-user-friends"></i> Active Users</h3>
+          <div class="user-counter">
+            <span id="liveUserCount">0</span> online
+          </div>
+        </div>
+        <div class="card-content">
+          <div style="margin-bottom:10px; display:flex; gap:8px;">
+            <input id="userSearch" type="text" placeholder="ค้นหาผู้ใช้..." class="input-glow" style="flex:1;">
+          </div>
+          <div class="users-list" id="activeUsersList">
+            <!-- จะแสดงผู้ใช้ที่ active -->
+          </div>
+
+          <div class="activity-timeline" id="activityTimeline">
+            <h5>กิจกรรมล่าสุด</h5>
+            <div style="margin:8px 0 12px;">
+              <input id="activitySearch" type="text" placeholder="ค้นหากิจกรรม..." class="input-glow" style="width:100%;">
+            </div>
+            <div class="timeline-items">
+              <!-- จะแสดง activity ล่าสุด -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Active Events Management -->
+      <div class="control-card full-width">
+        <div class="card-header">
+          <h3><i class="fas fa-bolt"></i> Active Events</h3>
+        </div>
+        <div class="card-content">
+          <div class="event-creation">
+            <div class="form-group">
+              <label for="eventTitle">Event Title</label>
+              <input type="text" id="eventTitle" placeholder="ชื่ออีเว้นท์">
+            </div>
+            <div class="form-group">
+              <label for="eventMessage">Message</label>
+              <textarea id="eventMessage" rows="2" placeholder="ข้อความแจ้งเตือน"></textarea>
+            </div>
+            <div class="form-group">
+              <label for="eventCommand">Command (optional)</label>
+              <input type="text" id="eventCommand" placeholder="คำสั่งที่รันเมื่อสร้างอีเว้นท์">
+            </div>
+            <div class="form-group">
+              <label for="eventDuration">Duration (seconds)</label>
+              <input type="number" id="eventDuration" value="10" min="1" max="300">
+            </div>
+            <button id="createEvent" class="btn btn-primary">
+              <i class="fas fa-plus"></i> สร้างอีเว้นท์
+            </button>
+          </div>
+
+          <div class="quick-commands">
+            <h4>Quick Commands</h4>
+            <div class="command-grid">
+              <button class="cmd-btn" onclick="executeQuickCommand('party-mode')">Party Mode</button>
+              <button class="cmd-btn" onclick="executeQuickCommand('hacker-mode')">Hacker Mode</button>
+              <button class="cmd-btn" onclick="executeQuickCommand('rainbow-mode')">Rainbow Mode</button>
+            </div>
+          </div>
+
+          <div class="active-events">
+            <div style="display:flex; gap:8px; align-items:center;">
+              <input id="eventSearch" type="text" class="input-glow" placeholder="ค้นหาอีเว้นท์..." style="flex:1;">
+              <div class="user-counter"><span id="eventsCount">0</span> events</div>
+            </div>
+            <div id="eventsList" class="events-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- System Performance Monitor -->
+      <div class="control-card performance-card">
+        <div class="card-header">
+          <h3><i class="fas fa-server"></i> System Performance</h3>
+          <button id="refreshPerformance" class="btn-icon">
+            <i class="fas fa-sync-alt"></i>
+          </button>
+        </div>
+        <div class="card-content">
+          <div class="performance-metrics">
+            <div class="metric-row">
+              <label>CPU Usage</label>
+              <div class="progress-bar">
+                <div class="progress-fill" id="cpuProgress" style="width: 0%"></div>
+                <span id="cpuPercentage">0%</span>
+              </div>
+            </div>
+
+            <div class="metric-row">
+              <label>Memory Usage</label>
+              <div class="progress-bar">
+                <div class="progress-fill" id="memoryProgress" style="width: 0%"></div>
+                <span id="memoryPercentage">0%</span>
+              </div>
+            </div>
+
+            <div class="metric-row">
+              <label>Disk Usage</label>
+              <div class="progress-bar">
+                <div class="progress-fill" id="diskProgress" style="width: 0%"></div>
+                <span id="diskPercentage">0%</span>
+              </div>
+            </div>
+
+            <div class="metric-row">
+              <label>Network I/O</label>
+              <div class="network-stats">
+                <span>↑ <span id="networkUp">0 KB/s</span></span>
+                <span>↓ <span id="networkDown">0 KB/s</span></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Process List -->
+          <div class="process-list">
+            <h5>Active Processes</h5>
+            <div class="process-items" id="processList">
+              <!-- จะแสดง process ที่ทำงาน -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+
+      <!-- Advanced Settings -->
+      <div class="control-card settings-card">
+        <div class="card-header">
+          <h3><i class="fas fa-cog"></i> Advanced Settings</h3>
+        </div>
+        <div class="card-content">
+          <div class="settings-tabs">
+            <button class="tab-btn active" data-tab="general">General</button>
+            <button class="tab-btn" data-tab="limits">Limits</button>
+            <button class="tab-btn" data-tab="security">Security</button>
+          </div>
+
+          <div class="tab-content">
+            <!-- General Settings -->
+            <div class="tab-panel active" id="general-tab">
+              <div class="form-group">
+                <label for="maxConcurrentProcesses">Max Concurrent Processes</label>
+                <input type="number" id="maxConcurrentProcesses" value="3" min="1" max="10">
+              </div>
+
+              <div class="form-group">
+                <label for="defaultVideoQuality">Default Video Quality</label>
+                <select id="defaultVideoQuality">
+                  <option value="720">720p</option>
+                  <option value="1080">1080p</option>
+                  <option value="best">Best Available</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="emailNotifications">
+                  <input type="checkbox" id="emailNotifications">
+                  Enable Email Notifications
+                </label>
+              </div>
+            </div>
+
+            <!-- Limits Settings -->
+            <div class="tab-panel" id="limits-tab">
+              <div class="form-group">
+                <label for="maxFileSize">Max File Size (MB)</label>
+                <input type="number" id="maxFileSize" value="100" min="10" max="1000">
+              </div>
+
+              <div class="form-group">
+                <label for="rateLimitPerIP">Rate Limit (requests/hour)</label>
+                <input type="number" id="rateLimitPerIP" value="50" min="1" max="1000">
+              </div>
+
+              <div class="form-group">
+                <label for="maxProcessingTime">Max Processing Time (minutes)</label>
+                <input type="number" id="maxProcessingTime" value="10" min="1" max="60">
+              </div>
+            </div>
+
+            <!-- Security Settings -->
+            <div class="tab-panel" id="security-tab">
+              <div class="form-group">
+                <label for="enableIPWhitelist">
+                  <input type="checkbox" id="enableIPWhitelist">
+                  Enable IP Whitelist
+                </label>
+              </div>
+
+              <div class="form-group">
+                <label for="blockSuspiciousActivity">
+                  <input type="checkbox" id="blockSuspiciousActivity">
+                  Block Suspicious Activity
+                </label>
+              </div>
+
+              <div class="form-group">
+                <label for="sessionTimeout">Session Timeout (minutes)</label>
+                <input type="number" id="sessionTimeout" value="30" min="5" max="480">
+              </div>
+            </div>
+          </div>
+
+          <button id="saveAdvancedSettings" class="btn btn-primary">
+            <i class="fas fa-save"></i>
+            Save Settings
+          </button>
+        </div>
+      </div>
+
+      <!-- System Controls -->
+      <div class="control-card">
+        <div class="card-header">
+          <h3><i class="fas fa-toggle-on"></i> System Controls</h3>
+        </div>
+        <div class="card-content">
+          <div class="toggle-group">
+            <div class="toggle-item">
+              <label for="uploadToggle">File Upload System</label>
+              <div class="toggle-switch">
+                <input type="checkbox" id="uploadToggle" checked>
+                <span class="toggle-slider"></span>
+              </div>
+            </div>
+
+            <div class="toggle-item">
+              <label for="youtubeToggle">YouTube Download System</label>
+              <div class="toggle-switch">
+                <input type="checkbox" id="youtubeToggle" checked>
+                <span class="toggle-slider"></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="system-status">
+            <div class="status-item">
+              <span class="status-label">Upload Status:</span>
+              <span id="uploadStatus" class="status-value online">Online</span>
+            </div>
+            <div class="status-item">
+              <span class="status-label">YouTube Status:</span>
+              <span id="youtubeStatus" class="status-value online">Online</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Announcements & Chat -->
+      <div class="control-card full-width">
+        <div class="card-header">
+          <h3><i class="fas fa-bullhorn"></i> ประกาศ & แชท</h3>
+        </div>
+        <div class="card-content">
+          <!-- Announcements -->
+          <div class="section">
+            <h4><i class="fas fa-megaphone"></i> ประกาศทั่วไป</h4>
+            <div class="form-group">
+              <label for="announcement">ข้อความประกาศ</label>
+              <textarea id="announcement" rows="2" placeholder="ใส่ข้อความประกาศ (ว่างเปล่าเพื่อซ่อน)"></textarea>
+            </div>
+            <div class="button-group">
+              <button id="updateAnnouncement" class="btn btn-primary">
+                <i class="fas fa-broadcast-tower"></i>
+                ประกาศ
+              </button>
+              <button id="clearAnnouncement" class="btn btn-secondary">
+                <i class="fas fa-times"></i>
+                ล้าง
+              </button>
+            </div>
+            <div class="preview-box" id="announcementPreview">ไม่มีประกาศ</div>
+          </div>
+
+          <!-- Chat Messages -->
+          <div class="section">
+            <h4><i class="fas fa-comments"></i> ส่งข้อความแชท</h4>
+            <div class="form-group">
+              <label for="chatMessage">ข้อความถึงผู้ใช้</label>
+              <input type="text" id="chatMessage" placeholder="พิมพ์ข้อความถึงผู้ใช้ทุกคน" maxlength="200">
+            </div>
+            <div class="button-group">
+              <button id="sendChatMessage" class="btn btn-success">
+                <i class="fas fa-paper-plane"></i>
+                ส่งข้อความ
+              </button>
+              <button id="clearChatHistory" class="btn btn-warning">
+                <i class="fas fa-eraser"></i>
+                ล้างประวัติ
+              </button>
+            </div>
+          </div>
+
+          <!-- Chat History -->
+          <div class="section">
+            <h4><i class="fas fa-history"></i> ประวัติแชท</h4>
+            <div id="chatHistory" class="chat-history-box">
+              <div class="chat-item">ยังไม่มีข้อความ</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Media Control -->
+      <div class="control-card">
+        <div class="card-header">
+          <h3><i class="fas fa-tv"></i> Media Control</h3>
+        </div>
+        <div class="card-content">
+          <!-- URL Media Control -->
+          <div class="media-section">
+            <h4>🎬 URL Media Control</h4>
+            <div class="form-group">
+              <label for="mediaUrl">URL ของวิดีโอ/เสียง:</label>
+              <input type="url" id="mediaUrl" placeholder="ใส่ URL ของ YouTube, วิดีโอ หรือเสียง">
+            </div>
+            <div class="form-group">
+              <label for="mediaType">ประเภท:</label>
+              <select id="mediaType">
+                <option value="video">วิดีโอ</option>
+                <option value="audio">เสียง</option>
+              </select>
+            </div>
+            <div class="media-controls">
+              <button id="playMedia" class="btn btn-success">
+                <i class="fas fa-play"></i> เล่น
+              </button>
+              <button id="stopMedia" class="btn btn-danger">
+                <i class="fas fa-stop"></i> หยุด
+              </button>
+            </div>
+
+            <!-- Media Preview -->
+            <div id="mediaPreview" class="media-preview" style="display: none;">
+              <iframe id="mediaIframe" width="100%" height="200" frameborder="0" allowfullscreen loading="lazy" referrerpolicy="no-referrer"></iframe>
+            </div>
+            <div id="mediaPlaceholder" class="media-placeholder">
+              <i class="fas fa-video"></i>
+              <p>ใส่ URL แล้วดูตัวอย่าง</p>
+            </div>
+          </div>
+
+          <!-- File Upload Media Control -->
+          <div class="media-section">
+            <h4>📁 File Upload Media Control</h4>
+            <div class="form-group">
+              <label for="mediaFileInput">เลือกไฟล์ (วิดีโอ/เสียง):</label>
+              <input type="file" id="mediaFileInput" accept="video/*,audio/*">
+            </div>
+            <div class="form-group">
+              <label for="fileMediaType">ประเภท:</label>
+              <select id="fileMediaType">
+                <option value="video">วิดีโอ</option>
+                <option value="audio">เสียง</option>
+              </select>
+            </div>
+            <div class="media-controls">
+              <button id="playFileMedia" class="btn btn-success">
+                <i class="fas fa-upload"></i> อัปโหลดและเล่น
+              </button>
+              <button id="clearFileMedia" class="btn btn-secondary">
+                <i class="fas fa-trash"></i> ล้าง
+              </button>
+            </div>
+
+            <!-- Upload Progress -->
+            <div id="fileUploadProgress" class="progress-container" style="display: none;">
+              <div class="progress-bar">
+                <div id="uploadProgressBar" class="progress-fill"></div>
+              </div>
+              <div id="uploadStatus" class="upload-status">กำลังอัปโหลด...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Password Change -->
+      <div class="control-card">
+        <div class="card-header">
+          <h3><i class="fas fa-key"></i> Security</h3>
+        </div>
+        <div class="card-content">
+          <div class="form-group">
+            <label for="newPassword">New Password</label>
+            <input type="password" id="newPassword" placeholder="Enter new password">
+          </div>
+          <div class="form-group">
+            <label for="confirmPassword">Confirm Password</label>
+            <input type="password" id="confirmPassword" placeholder="Confirm new password">
+          </div>
+          <button id="changePassword" class="btn btn-warning">
+            <i class="fas fa-shield-alt"></i>
+            Change Password
+          </button>
+        </div>
+      </div>
+
+      <!-- File Management -->
+      <div class="control-card full-width">
+        <div class="card-header">
+          <h3><i class="fas fa-folder-open"></i> File Management</h3>
+        </div>
+        <div class="card-content">
+          <div class="file-stats-grid">
+            <div class="stat-item">
+              <div class="stat-value" id="uploadFiles">0</div>
+              <div class="stat-label">Upload Files</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="outputFiles">0</div>
+              <div class="stat-label">Output Files</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="zipFiles">0</div>
+              <div class="stat-label">Zip Files</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="diskUsage">0 MB</div>
+              <div class="stat-label">Disk Usage</div>
+            </div>
+          </div>
+          <div class="file-actions">
+            <button id="refreshFileStats" class="btn btn-secondary">
+              <i class="fas fa-sync"></i>
+              Refresh Stats
+            </button>
+            <button id="cleanupOldFiles" class="btn btn-warning">
+              <i class="fas fa-broom"></i>
+              Cleanup Old Files
+            </button>
+            <button id="emergencyCleanup" class="btn btn-danger">
+              <i class="fas fa-exclamation-triangle"></i>
+              Emergency Cleanup
+            </button>
+          </div>
+          <div class="file-details">
+            <div class="detail-section">
+              <h4>Recent Activity</h4>
+              <div id="recentActivity" class="activity-list">
+                <div class="activity-item">No recent activity</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- System Monitor -->
+      <div class="control-card">
+        <div class="card-header">
+          <h3><i class="fas fa-chart-bar"></i> System Monitor</h3>
+        </div>
+        <div class="card-content">
+          <div class="stats-grid">
+            <div class="stat-item">
+              <div class="stat-value" id="connectedUsers">0</div>
+              <div class="stat-label">Connected Users</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="activeProcesses">0</div>
+              <div class="stat-label">Active Processes</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="totalRequests">0</div>
+              <div class="stat-label">Total Requests</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="uptime">0m</div>
+              <div class="stat-label">Server Uptime</div>
+            </div>
+          </div>
+          <div class="system-actions">
+            <button id="refreshSystemStats" class="btn btn-secondary">
+              <i class="fas fa-sync"></i>
+              Refresh
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Backup & Restore -->
+      <div class="control-card">
+        <div class="card-header">
+          <h3><i class="fas fa-database"></i> Backup & Restore</h3>
+        </div>
+        <div class="card-content">
+          <div class="backup-section">
+            <h4>Create Backup</h4>
+            <div class="backup-options">
+              <label>
+                <input type="checkbox" id="backupConfig" checked>
+                Configuration Settings
+              </label>
+              <label>
+                <input type="checkbox" id="backupAnalytics" checked>
+                Analytics Data
+              </label>
+              <label>
+                <input type="checkbox" id="backupLogs">
+                Error Logs
+              </label>
+            </div>
+            <button id="createBackup" class="btn btn-primary">
+              <i class="fas fa-download"></i>
+              Create & Download Backup
+            </button>
+          </div>
+
+          <div class="restore-section">
+            <h4>Restore from Backup</h4>
+            <input type="file" id="restoreFile" accept=".json" style="display: none;">
+            <button id="selectBackupFile" class="btn btn-secondary">
+              <i class="fas fa-file-upload"></i>
+              Select Backup File
+            </button>
+            <button id="restoreBackup" class="btn btn-warning" disabled>
+              <i class="fas fa-upload"></i>
+              Restore Backup
+            </button>
+          </div>
+
+          <div class="backup-status">
+            <div class="status-item">
+              <span class="status-label">Last Backup:</span>
+              <span id="lastBackupTime" class="status-value">Never</span>
+            </div>
+            <div class="status-item">
+              <span class="status-label">Auto Backup:</span>
+              <span id="autoBackupStatus" class="status-value">Enabled</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- API Rate Limiting -->
+      <div class="control-card">
+        <div class="card-header">
+          <h3><i class="fas fa-shield-alt"></i> Rate Limiting</h3>
+        </div>
+        <div class="card-content">
+          <div class="rate-limit-stats">
+            <div class="stat-item">
+              <div class="stat-value" id="totalIPs">0</div>
+              <div class="stat-label">Active IPs</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="blockedIPs">0</div>
+              <div class="stat-label">Blocked IPs</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="requestsPerHour">0</div>
+              <div class="stat-label">Requests/Hour</div>
+            </div>
+          </div>
+
+          <div class="ip-management">
+            <h5>IP Management</h5>
+            <div class="ip-input-group">
+              <input type="text" id="ipAddress" placeholder="192.168.1.1">
+              <button id="blockIP" class="btn btn-danger">
+                <i class="fas fa-ban"></i>
+                Block IP
+              </button>
+            </div>
+
+            <div class="blocked-ips-list" id="blockedIPsList">
+              <div class="ip-item">No blocked IPs</div>
+            </div>
+
+            <button id="refreshRateLimit" class="btn btn-secondary">
+              <i class="fas fa-sync"></i>
+              Refresh Stats
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Queue Management -->
+      <div class="control-card full-width">
+        <div class="card-header">
+          <h3><i class="fas fa-list-ol"></i> Processing Queue</h3>
+        </div>
+        <div class="card-content">
+          <div style="margin-bottom:10px; display:flex; gap:8px;">
+            <input id="queueSearch" type="text" placeholder="ค้นหาในคิว..." class="input-glow" style="flex:1;">
+          </div>
+          <div class="queue-stats">
+            <div class="stat-item">
+              <div class="stat-value" id="queueLength">0</div>
+              <div class="stat-label">In Queue</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="processingCount">0</div>
+              <div class="stat-label">Processing</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="avgWaitTime">0s</div>
+              <div class="stat-label">Avg Wait Time</div>
+            </div>
+          </div>
+
+          <div class="queue-list" id="queueList">
+            <div class="queue-item">No items in queue</div>
+          </div>
+
+          <div class="queue-actions">
+            <button id="pauseQueue" class="btn btn-warning">
+              <i class="fas fa-pause"></i>
+              Pause Queue
+            </button>
+            <button id="resumeQueue" class="btn btn-success" disabled>
+              <i class="fas fa-play"></i>
+              Resume Queue
+            </button>
+            <button id="clearQueue" class="btn btn-danger">
+              <i class="fas fa-trash"></i>
+              Clear Queue
+            </button>
+          </div>
+        </div>
+      </div>
+
+
+
+
+
+      <!-- Error Logs -->
+      <div class="control-card full-width">
+        <div class="card-header">
+          <h3><i class="fas fa-exclamation-circle"></i> Error Monitoring</h3>
+        </div>
+        <div class="card-content">
+          <div class="error-controls">
+            <button id="refreshErrorLogs" class="btn btn-secondary">
+              <i class="fas fa-sync"></i>
+              Refresh Logs
+            </button>
+            <button id="clearErrorLogs" class="btn btn-warning">
+              <i class="fas fa-trash"></i>
+              Clear Logs
+            </button>
+          </div>
+          <div class="error-logs">
+            <div id="errorLogsList" class="logs-container">
+              <div class="log-item">No errors logged</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notifications -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Mobile Debug Tool (conditional) -->
+  <script>
+    (function() {
+      var enable = location.search.includes('debug=1') || localStorage.getItem('eruda') === 'true';
+      if (!enable) return;
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/eruda';
+      s.onload = function() { window.eruda && window.eruda.init(); };
+      document.head.appendChild(s);
+    })();
+  </script>
+
+  <!-- Scripts -->
+  <script src="/socket.io/socket.io.js" defer></script>
+  <script src="admin.js" defer></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js').catch(function(){});
+      });
+    }
+  </script>
+</body>
+</html>
