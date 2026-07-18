@@ -75,6 +75,9 @@ local OpenRouterApiKeys = {"", "", ""}
 local OpenRouterModel = "openai/gpt-4o-mini"
 local OpenRouterKeyCount = 1
 local OpenRouterWordCount = 3
+local OpenRouterDebugMode = false
+local OpenRouterLastRawResponse = ""
+local OpenRouterLastParsedContent = ""
 local openRouterKeyCursor = 0
 
 -- New Features Vars
@@ -206,6 +209,7 @@ local UserConfig = {
     OpenRouterModel = "openai/gpt-4o-mini",
     OpenRouterKeyCount = 1,
     OpenRouterWordCount = 3,
+    OpenRouterDebugMode = false,
     OtherPlayerDetection = false,
     TurnStatusUIToggle = false,
     SmartVisuals = false, -- Evolution
@@ -256,6 +260,7 @@ OpenRouterApiKeys[3] = UserConfig.OpenRouterApiKey3 or ""
 OpenRouterModel = UserConfig.OpenRouterModel or OpenRouterModel
 OpenRouterKeyCount = math.clamp(tonumber(UserConfig.OpenRouterKeyCount) or 1, 1, 3)
 OpenRouterWordCount = math.clamp(tonumber(UserConfig.OpenRouterWordCount) or 3, 1, 10)
+OpenRouterDebugMode = UserConfig.OpenRouterDebugMode or false
 
 local apiLeastPickMode = UserConfig.apiLeastPickMode or false
 local apiLeastPickMinLen = UserConfig.apiLeastPickMinLen or 0
@@ -1216,6 +1221,16 @@ ToggleOllamaGui = function()
         if words and #words > 0 then
             local out = "✅ ได้คำ (JSON parsed):\n"
             for i, word in ipairs(words) do out = out .. i .. ". " .. word .. "\n" end
+            if OpenRouterDebugMode then
+                out = out .. "\nAI CONTENT:\n" .. (OpenRouterLastParsedContent ~= "" and OpenRouterLastParsedContent or "(empty)")
+            end
+            ResultLabel.Text = out
+            ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, OpenRouterDebugMode and 700 or ((#words + 5) * 20))
+        else
+            local raw = OpenRouterLastRawResponse ~= "" and OpenRouterLastRawResponse or "(ไม่มี raw response)"
+            if #raw > 2500 then raw = raw:sub(1, 2500) .. "..." end
+            ResultLabel.Text = "❌ ไม่พบคำ / API ตอบไม่ถูกต้อง / Key หมด rate limit\n\nRAW RESPONSE:\n" .. raw
+            ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 900)
             ResultLabel.Text = out
             ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, (#words + 5) * 20)
         else
@@ -1357,6 +1372,12 @@ local function GetOpenRouterExcludedWords(prefix)
             seen[word] = true
         end
     end
+    for word, _ in pairs(usedAPIWords) do
+        if word:sub(1, #prefix):lower() == prefix:lower() and not seen[word] then
+            table.insert(excluded, word)
+            seen[word] = true
+        end
+    end
     return excluded
 end
 
@@ -1367,6 +1388,15 @@ local function GetNextOpenRouterKey()
         if key and key:match("%S") then return key, openRouterKeyCursor end
     end
     return nil, nil
+end
+
+local function ExtractOpenRouterWordsFromParsed(parsed)
+    if type(parsed) ~= "table" then return nil end
+    if type(parsed.words) == "table" then return parsed.words end
+    if type(parsed.data) == "table" then return parsed.data end
+    if type(parsed.result) == "table" then return parsed.result end
+    if #parsed > 0 then return parsed end
+    return nil
 end
 
 FetchWordsFromOllama = function(prefix)
@@ -1380,6 +1410,10 @@ FetchWordsFromOllama = function(prefix)
     local excluded = GetOpenRouterExcludedWords(prefix)
     local excludedText = (#excluded > 0) and table.concat(excluded, ", ") or "none"
     local hardText = isHardMode and "Prefer real English words ending with difficult letters: x, z, q, j, v, k. If impossible, return best valid alternatives." or "Prefer common real English words."
+    local prompt = string.format([[Return ONLY valid minified JSON. Schema: {"words":["word1","word2"]}. Need exactly %d unique real English words that start with "%s", length between %d and %d, lowercase alphabetic a-z only. Do not include these already used words: %s. %s]], OpenRouterWordCount, prefix:lower(), math.max(minLen, #prefix), maxLength, excludedText, hardText)
+
+    OpenRouterLastRawResponse = ""
+    OpenRouterLastParsedContent = ""
     local prompt = string.format([[Return ONLY valid minified JSON with this schema: {"words":["word1","word2"]}. Need exactly %d unique real English words that start with "%s", length between %d and %d, lowercase alphabetic a-z only. Do not include these already used words: %s. %s]], OpenRouterWordCount, prefix:lower(), math.max(minLen, #prefix), maxLength, excludedText, hardText)
 
     local words = {}
@@ -1389,6 +1423,16 @@ FetchWordsFromOllama = function(prefix)
             Rayfield:Notify({Title="OpenRouter Error", Content="กรุณาใส่ API Key อย่างน้อย 1 ช่อง", Duration=3})
             return nil
         end
+
+        local payload = {
+            model = OpenRouterModel,
+            messages = {
+                {role = "system", content = "You generate word-game answers. Output JSON only. No markdown, no explanation."},
+                {role = "user", content = prompt}
+            },
+            temperature = isHardMode and 0.35 or 0.2,
+            max_tokens = 180
+        }
 
         local success, response = pcall(function()
             return request({
@@ -1400,6 +1444,32 @@ FetchWordsFromOllama = function(prefix)
                     ["HTTP-Referer"] = "https://roblox.com",
                     ["X-Title"] = "999 Word Solver"
                 },
+                Body = HttpService:JSONEncode(payload)
+            })
+        end)
+
+        local statusCode = response and (response.StatusCode or response.Status or response.status_code)
+        local body = response and (response.Body or response.body or "") or tostring(response)
+        OpenRouterLastRawResponse = "KEY #" .. tostring(keyIndex) .. " | HTTP " .. tostring(statusCode) .. "\n" .. tostring(body)
+        if OpenRouterDebugMode then
+            print("========== OPENROUTER RAW ==========")
+            print(OpenRouterLastRawResponse)
+            print("========== OPENROUTER PROMPT ==========")
+            print(prompt)
+        end
+
+        if success and statusCode and statusCode >= 200 and statusCode < 300 then
+            local ok, data = pcall(function() return HttpService:JSONDecode(body) end)
+            if ok and data and data.choices and data.choices[1] and data.choices[1].message then
+                local content = data.choices[1].message.content or ""
+                OpenRouterLastParsedContent = content
+                content = content:gsub("```json", ""):gsub("```", ""):match("^%s*(.-)%s*$") or content
+                local jsonOnly = content:match("({.*})") or content
+                local okJson, parsed = pcall(function() return HttpService:JSONDecode(jsonOnly) end)
+                local rawWords = okJson and ExtractOpenRouterWordsFromParsed(parsed) or nil
+                if rawWords then
+                    local seen = {}
+                    for _, raw in ipairs(rawWords) do
                 Body = HttpService:JSONEncode({
                     model = OpenRouterModel,
                     messages = {
@@ -1435,6 +1505,14 @@ FetchWordsFromOllama = function(prefix)
                         Rayfield:Notify({Title="OpenRouter AI", Content="ใช้ Key #"..tostring(keyIndex).." ได้ "..#words.." คำ", Duration=2})
                         return words
                     end
+                elseif OpenRouterDebugMode then
+                    warn("OpenRouter JSON parse failed. AI content: " .. tostring(content))
+                end
+            elseif ok and data and data.error then
+                warn("OpenRouter API error: " .. tostring(data.error.message or data.error))
+            end
+        else
+            warn("OpenRouter key #" .. tostring(keyIndex) .. " failed: " .. tostring(statusCode) .. " " .. tostring(body))
                 end
             end
         elseif response and (response.StatusCode == 429 or response.StatusCode == 401 or response.StatusCode == 402) then
@@ -2629,12 +2707,48 @@ MainTab:CreateInput({
     PlaceholderText = tostring(OpenRouterWordCount),
     Callback = function(txt) OpenRouterWordCount = math.clamp(tonumber(txt) or 3, 1, 10); UserConfig.OpenRouterWordCount = OpenRouterWordCount; SaveUserConfig() end,
 })
+MainTab:CreateToggle({
+    Name = "🧪 Debug OpenRouter Raw Response (ดูว่า AI/API ตอบอะไร)",
+    CurrentValue = OpenRouterDebugMode,
+    Flag = "OpenRouterDebugMode",
+    Callback = function(v)
+        OpenRouterDebugMode = v
+        UserConfig.OpenRouterDebugMode = v
+        SaveUserConfig()
+        Rayfield:Notify({Title="OpenRouter Debug", Content=v and "เปิด: raw response จะพิมพ์ใน console และ Test UI" or "ปิด debug แล้ว", Duration=2})
+    end,
+})
+MainTab:CreateButton({
+    Name = "📋 Print Raw Response ล่าสุด (Console)",
+    Callback = function()
+        print("========== LAST OPENROUTER RAW ==========")
+        print(OpenRouterLastRawResponse ~= "" and OpenRouterLastRawResponse or "ยังไม่มี response")
+        print("========== LAST AI CONTENT ==========")
+        print(OpenRouterLastParsedContent ~= "" and OpenRouterLastParsedContent or "ยังไม่มี content")
+    end,
+})
+    end,
+})
+MainTab:CreateDropdown({
+    Name = "🔁 ใช้กี่ API Key (สลับกันกัน rate limit)",
+    Options = {"1", "2", "3"},
+    CurrentOption = {tostring(OpenRouterKeyCount)},
+    MultipleOptions = false,
+    Flag = "OpenRouterKeyCount",
+    Callback = function(Option) OpenRouterKeyCount = tonumber(Option[1]) or 1; UserConfig.OpenRouterKeyCount = OpenRouterKeyCount; SaveUserConfig() end,
+})
+MainTab:CreateInput({
+    Name = "📦 จำนวนคำที่รับจาก AI ต่อรอบ",
+    PlaceholderText = tostring(OpenRouterWordCount),
+    Callback = function(txt) OpenRouterWordCount = math.clamp(tonumber(txt) or 3, 1, 10); UserConfig.OpenRouterWordCount = OpenRouterWordCount; SaveUserConfig() end,
+})
 MainTab:CreateButton({
     Name = "🤖 เปิดหน้าต่าง OpenRouter Test UI",
     Callback = function() ToggleOllamaGui() end,
 })
 MainTab:CreateParagraph({
     Title = "ℹ️ วิธีใช้ OpenRouter AI",
+    Content = "เลือก 'OpenRouter AI' ใน Priority แล้วใส่ API Key/Model ได้เอง\nระบบส่งรายการคำที่ใช้แล้วเป็น excluded เช่น apple เพื่อกัน AI ตอบซ้ำในรอบนั้น และบังคับ JSON เพื่อแยกคำได้ปลอดภัย\nถ้าดึงคำไม่ได้ให้เปิด Debug แล้วกด Test UI เพื่อดู raw response"
     Content = "เลือก 'OpenRouter AI' ใน Priority แล้วใส่ API Key/Model ได้เอง\nระบบส่งรายการคำที่ใช้แล้วเป็น excluded เช่น apple เพื่อกัน AI ตอบซ้ำในรอบนั้น และบังคับ JSON เพื่อแยกคำได้ปลอดภัย"
 })
 
