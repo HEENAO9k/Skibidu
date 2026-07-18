@@ -65,10 +65,10 @@ else
 end
 
 -- System Vars
-local WordDatabase = {} 
-local CustomWordDatabase = {} 
-local VerifiedWordsDB = {} 
-local UsedWordsHistory = {} 
+local WordDatabase = {}
+local CustomWordDatabase = {}
+local VerifiedWordsDB = {}
+local UsedWordsHistory = {}
 local isDBLoaded = false
 local isCustomDBLoaded = false
 local isProcessing = false
@@ -105,11 +105,8 @@ local OpenRouterModels = {
     "openai/gpt-oss-120b:free",
     "qwen/qwen-2.5-vl-7b-instruct:free"
 }
-local OpenRouterKeys = {
-    "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",
-    "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",
-    "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"
-}
+local OpenRouterKeys = {}
+local OpenRouterKeyText = ""
 local currentRouterKeyIndex = 1
 local isOpenRouterRotation = true
 local selectedRouterModel = OpenRouterModels[1]
@@ -149,7 +146,7 @@ local activeRunId = ""
 -- Wrong Words & Blacklist Vars
 local wrongWords = {}
 local wrongWordsStack = {}
-local blacklistedWords = {} 
+local blacklistedWords = {}
 local deltaWorkspaceFolder = nil
 local wrongWordMaxShow = 40
 
@@ -204,7 +201,7 @@ local UserConfig = {
     SourcePriority1 = "OpenRouter AI (New)",
     SourcePriority2 = "Database (Built-in)",
     SourcePriority3 = "Custom DB (Amnexe)",
-    HumanLikeTyping = false, 
+    HumanLikeTyping = false,
     apiLeastPickMode = false,
     apiLeastPickMinLen = 0,
     MobileBtnToggle = false,
@@ -215,7 +212,7 @@ local UserConfig = {
     AntiIdle = false,
     ErrorDetectionMethod = "highlight",
     UseSavedWordsFirst = true,
-    MinLengthCheck = false,    
+    MinLengthCheck = false,
     DecisionLogToggle = false,
     OllamaUrl = "",
     OtherPlayerDetection = false,
@@ -227,7 +224,8 @@ local UserConfig = {
     StartDelay = 0.1,
     OpenRouterModel = OpenRouterModels[1],
     OpenRouterRotation = true,
-    OpenRouterCount = 5
+    OpenRouterCount = 5,
+    OpenRouterKeys = ""
 }
 
 SaveUserConfig = function()
@@ -267,6 +265,32 @@ end
 selectedRouterModel = UserConfig.OpenRouterModel or OpenRouterModels[1]
 isOpenRouterRotation = UserConfig.OpenRouterRotation
 openRouterWordCount = UserConfig.OpenRouterCount or 5
+OpenRouterKeyText = UserConfig.OpenRouterKeys or ""
+
+local function TrimText(text)
+    return tostring(text or ""):match("^%s*(.-)%s*$")
+end
+
+local function RefreshOpenRouterKeys(text)
+    OpenRouterKeyText = TrimText(text or OpenRouterKeyText)
+    OpenRouterKeys = {}
+    for key in OpenRouterKeyText:gmatch("[^,%s]+") do
+        key = TrimText(key)
+        if key ~= "" then
+            table.insert(OpenRouterKeys, key)
+        end
+    end
+    if currentRouterKeyIndex > #OpenRouterKeys then currentRouterKeyIndex = 1 end
+    return #OpenRouterKeys
+end
+
+local function MaskOpenRouterKey(key)
+    key = tostring(key or "")
+    if #key <= 12 then return "ยังไม่ได้ตั้งค่า" end
+    return key:sub(1, 8) .. "..." .. key:sub(-4)
+end
+
+RefreshOpenRouterKeys(OpenRouterKeyText)
 
 local apiLeastPickMode = UserConfig.apiLeastPickMode or false
 local apiLeastPickMinLen = UserConfig.apiLeastPickMinLen or 0
@@ -315,11 +339,11 @@ local function AddToBlacklist(word)
     if not word or #word == 0 then return end
     word = word:lower()
     if blacklistedWords[word] then return end
-    
+
     blacklistedWords[word] = true
     wrongWords[word] = true
     SaveBlacklist()
-    
+
     Rayfield:Notify({
         Title = "🚫 Blacklist Permanent",
         Content = "คำ: " .. word:upper() .. "\nเพิ่มเข้า Blacklist ถาวร",
@@ -527,23 +551,23 @@ LoadWrongWordsFromWorkspace()
 SendSmartChat = function(category)
     if not isAutoChatActive then return end
     if tick() - lastChatTime < chatCooldown then return end
-    
+
     local messages = TauntConfig[category]
     if not messages or #messages == 0 then return end
-    
+
     local msg = messages[math.random(1, #messages)]
     lastChatTime = tick()
-    
+
     local success = pcall(function()
         if TextChatService.TextChannels and TextChatService.TextChannels.RBXGeneral then
             TextChatService.TextChannels.RBXGeneral:SendAsync(msg)
         end
     end)
-    
+
     if not success then
         pcall(function()
             local event = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
-            if event then 
+            if event then
                 local say = event:FindFirstChild("SayMessageRequest")
                 if say then say:FireServer(msg, "All") end
             end
@@ -576,10 +600,10 @@ local function CreateESP(player)
     local frame = Instance.new("Frame", bb)
     frame.Size = UDim2.fromScale(1, 1)
     frame.BackgroundTransparency = 1
-    
+
     local uiStroke = Instance.new("UIStroke", frame)
     uiStroke.Thickness = 0
-    
+
     local nameLbl = Instance.new("TextLabel", frame)
     nameLbl.Name = "NameLabel"
     nameLbl.Size = UDim2.fromScale(1, 0.3)
@@ -590,7 +614,7 @@ local function CreateESP(player)
     nameLbl.Font = Enum.Font.GothamBlack
     nameLbl.TextSize = 14
     nameLbl.TextStrokeTransparency = 0.5
-    
+
     local statusLbl = Instance.new("TextLabel", frame)
     statusLbl.Name = "StatusLabel"
     statusLbl.Size = UDim2.fromScale(1, 0.25)
@@ -618,7 +642,7 @@ local function CreateESP(player)
         ColorSequenceKeypoint.new(0, Color3.fromRGB(0,255,255)),
         ColorSequenceKeypoint.new(1, Color3.fromRGB(0,150,255))
     }
-    
+
     PlayerBillboards[player.UserId] = {
         GUI = bb,
         NameL = nameLbl,
@@ -640,11 +664,11 @@ end
 UpdatePlayerESP = function(player, statusText, statusColor, wordText)
     if not isSmartVisualsActive then return end
     if not player then return end
-    
+
     if not PlayerBillboards[player.UserId] then
         CreateESP(player)
     end
-    
+
     local entry = PlayerBillboards[player.UserId]
     if entry then
         if not entry.GUI.Adornee then
@@ -652,12 +676,12 @@ UpdatePlayerESP = function(player, statusText, statusColor, wordText)
                  entry.GUI.Adornee = player.Character.Head
              end
         end
-        
-        if statusText then 
-            entry.StatusL.Text = statusText 
+
+        if statusText then
+            entry.StatusL.Text = statusText
             if statusColor then entry.StatusL.TextColor3 = statusColor end
         end
-        
+
         if wordText then
             entry.WordL.Text = wordText
             TweenService:Create(entry.WordL, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {TextSize = 18}):Play()
@@ -939,7 +963,7 @@ local function CreateDecisionLogGui()
     decisionLogGui = Instance.new("ScreenGui", CoreGui)
     decisionLogGui.Name = "DecisionLogLiquidGlass"
     decisionLogGui.ResetOnSpawn = false
-    
+
     local frame = Instance.new("Frame", decisionLogGui)
     frame.Name = "LogFrame"
     frame.Size = UDim2.fromOffset(260, 120)
@@ -947,18 +971,18 @@ local function CreateDecisionLogGui()
     frame.BackgroundColor3 = Color3.fromRGB(20, 30, 25)
     frame.BackgroundTransparency = 0.12
     frame.BorderSizePixel = 0
-    
+
     local glassCorner = Instance.new("UICorner", frame)
     glassCorner.CornerRadius = UDim.new(0.15, 0)
-    
+
     local stroke = Instance.new("UIStroke", frame)
     stroke.Color = Color3.fromRGB(100, 255, 120)
     stroke.Thickness = 2
     stroke.Transparency = 0.1
-    
+
     local grad = Instance.new("UIGradient", frame)
     grad.Rotation = 45
-    
+
     local title = Instance.new("TextLabel", frame)
     title.Text = "📝 Decision Log"
     title.Font = Enum.Font.GothamBold
@@ -968,7 +992,7 @@ local function CreateDecisionLogGui()
     title.Position = UDim2.fromScale(0.06, 0.06)
     title.Size = UDim2.fromScale(0.9, 0.2)
     title.TextXAlignment = Enum.TextXAlignment.Left
-    
+
     local content = Instance.new("TextLabel", frame)
     content.Name = "LogContent"
     content.Text = "Waiting..."
@@ -981,7 +1005,7 @@ local function CreateDecisionLogGui()
     content.TextXAlignment = Enum.TextXAlignment.Left
     content.TextYAlignment = Enum.TextYAlignment.Top
     content.TextWrapped = true
-    
+
     local draggingLog, dragInputLog, dragStartLog, startPosLog
     frame.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -1007,13 +1031,13 @@ local function CreateDecisionLogGui()
 end
 
 UpdateDecisionLogGui = function(prefix, minLen, resultWord)
-    if not showDecisionLog then 
-        if decisionLogGui then decisionLogGui.Enabled = false end 
-        return 
+    if not showDecisionLog then
+        if decisionLogGui then decisionLogGui.Enabled = false end
+        return
     end
     if not decisionLogGui or not decisionLogGui.Parent then CreateDecisionLogGui() end
     decisionLogGui.Enabled = true
-    
+
     local frame = decisionLogGui:FindFirstChild("LogFrame")
     if frame then
         local lbl = frame:FindFirstChild("LogContent")
@@ -1038,15 +1062,15 @@ CreateTurnStatusGui = function()
     frame.BackgroundColor3 = Color3.fromRGB(25,25,35) -- Same style as API List
     frame.BackgroundTransparency = 0.11
     frame.BorderSizePixel = 0
-    
+
     local glassCorner = Instance.new("UICorner", frame)
     glassCorner.CornerRadius = UDim.new(0.21, 0)
-    
+
     local stroke = Instance.new("UIStroke", frame)
     stroke.Color = Color3.fromRGB(92, 150, 255)
     stroke.Thickness = 2
     stroke.Transparency = 0.08
-    
+
     local grad = Instance.new("UIGradient", frame)
     grad.Rotation = 90
 
@@ -1114,7 +1138,7 @@ UpdateTurnStatusGui = function(turnName, lastWord)
     end
     if not turnStatusGui or not turnStatusGui.Parent then CreateTurnStatusGui() end
     turnStatusGui.Enabled = true
-    
+
     local frame = turnStatusGui:FindFirstChild("StatusFrame")
     if frame then
         local tLbl = frame:FindFirstChild("TurnLabel")
@@ -1141,10 +1165,10 @@ ToggleOpenRouterTester = function()
 
     local MainFrame = Instance.new("Frame")
     MainFrame.Name = "MainFrame"
-    MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+    MainFrame.BackgroundColor3 = Color3.fromRGB(16, 18, 30)
     MainFrame.BorderSizePixel = 0
-    MainFrame.Position = UDim2.new(0.5, -200, 0.5, -220)
-    MainFrame.Size = UDim2.new(0, 400, 0, 440)
+    MainFrame.Position = UDim2.new(0.5, -225, 0.5, -255)
+    MainFrame.Size = UDim2.new(0, 450, 0, 510)
     MainFrame.Active = true
     MainFrame.Draggable = true
     MainFrame.Parent = ScreenGui
@@ -1152,9 +1176,21 @@ ToggleOpenRouterTester = function()
     local MainCorner = Instance.new("UICorner")
     MainCorner.CornerRadius = UDim.new(0, 15)
     MainCorner.Parent = MainFrame
+    local MainStroke = Instance.new("UIStroke")
+    MainStroke.Color = Color3.fromRGB(90, 170, 255)
+    MainStroke.Thickness = 1.5
+    MainStroke.Transparency = 0.15
+    MainStroke.Parent = MainFrame
+    local MainGradient = Instance.new("UIGradient")
+    MainGradient.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 24, 45)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(8, 12, 22))
+    }
+    MainGradient.Rotation = 45
+    MainGradient.Parent = MainFrame
 
     local Header = Instance.new("Frame")
-    Header.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
+    Header.BackgroundColor3 = Color3.fromRGB(24, 34, 58)
     Header.BorderSizePixel = 0
     Header.Size = UDim2.new(1, 0, 0, 50)
     Header.Parent = MainFrame
@@ -1194,7 +1230,7 @@ ToggleOpenRouterTester = function()
     InfoLabel.Position = UDim2.new(0, 15, 0, 60)
     InfoLabel.Size = UDim2.new(1, -30, 0, 20)
     InfoLabel.Font = Enum.Font.GothamBold
-    InfoLabel.Text = "Model: " .. selectedRouterModel
+    InfoLabel.Text = "Model: " .. selectedRouterModel .. " | Keys: " .. tostring(#OpenRouterKeys) .. " | Active: " .. MaskOpenRouterKey(OpenRouterKeys[currentRouterKeyIndex])
     InfoLabel.TextColor3 = Color3.fromRGB(200, 200, 210)
     InfoLabel.TextSize = 12
     InfoLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -1202,7 +1238,40 @@ ToggleOpenRouterTester = function()
 
     local LetterLabel = Instance.new("TextLabel")
     LetterLabel.BackgroundTransparency = 1
-    LetterLabel.Position = UDim2.new(0, 15, 0, 90)
+    local KeyLabel = Instance.new("TextLabel")
+    KeyLabel.BackgroundTransparency = 1
+    KeyLabel.Position = UDim2.new(0, 15, 0, 85)
+    KeyLabel.Size = UDim2.new(1, -30, 0, 20)
+    KeyLabel.Font = Enum.Font.GothamBold
+    KeyLabel.Text = "🔑 OpenRouter API Keys (คั่นด้วย comma/space):"
+    KeyLabel.TextColor3 = Color3.fromRGB(200, 220, 255)
+    KeyLabel.TextSize = 13
+    KeyLabel.TextXAlignment = Enum.TextXAlignment.Left
+    KeyLabel.Parent = MainFrame
+
+    local KeyInput = Instance.new("TextBox")
+    KeyInput.BackgroundColor3 = Color3.fromRGB(24, 28, 42)
+    KeyInput.BorderSizePixel = 0
+    KeyInput.Position = UDim2.new(0, 15, 0, 110)
+    KeyInput.Size = UDim2.new(1, -30, 0, 35)
+    KeyInput.Font = Enum.Font.Gotham
+    KeyInput.PlaceholderText = "sk-or-v1-... (ใส่ได้หลาย key)"
+    KeyInput.Text = OpenRouterKeyText
+    KeyInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+    KeyInput.TextSize = 12
+    KeyInput.ClearTextOnFocus = false
+    KeyInput.Parent = MainFrame
+    local KeyCorner = Instance.new("UICorner")
+    KeyCorner.CornerRadius = UDim.new(0, 8)
+    KeyCorner.Parent = KeyInput
+    KeyInput.FocusLost:Connect(function()
+        local total = RefreshOpenRouterKeys(KeyInput.Text)
+        UserConfig.OpenRouterKeys = OpenRouterKeyText
+        SaveUserConfig()
+        InfoLabel.Text = "Model: " .. selectedRouterModel .. " | Keys: " .. tostring(total) .. " | Active: " .. MaskOpenRouterKey(OpenRouterKeys[currentRouterKeyIndex])
+    end)
+
+    LetterLabel.Position = UDim2.new(0, 15, 0, 155)
     LetterLabel.Size = UDim2.new(1, -30, 0, 20)
     LetterLabel.Font = Enum.Font.GothamBold
     LetterLabel.Text = "🔤 ตัวอักษรเริ่มต้น:"
@@ -1212,9 +1281,9 @@ ToggleOpenRouterTester = function()
     LetterLabel.Parent = MainFrame
 
     local LetterInput = Instance.new("TextBox")
-    LetterInput.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    LetterInput.BackgroundColor3 = Color3.fromRGB(24, 28, 42)
     LetterInput.BorderSizePixel = 0
-    LetterInput.Position = UDim2.new(0, 15, 0, 115)
+    LetterInput.Position = UDim2.new(0, 15, 0, 180)
     LetterInput.Size = UDim2.new(1, -30, 0, 35)
     LetterInput.Font = Enum.Font.GothamBold
     LetterInput.PlaceholderText = "พิมพ์ตัวอักษร เช่น: a, ab"
@@ -1230,7 +1299,7 @@ ToggleOpenRouterTester = function()
     local SearchButton = Instance.new("TextButton")
     SearchButton.BackgroundColor3 = Color3.fromRGB(50, 150, 250)
     SearchButton.BorderSizePixel = 0
-    SearchButton.Position = UDim2.new(0, 15, 0, 160)
+    SearchButton.Position = UDim2.new(0, 15, 0, 225)
     SearchButton.Size = UDim2.new(1, -30, 0, 40)
     SearchButton.Font = Enum.Font.GothamBold
     SearchButton.Text = "🔍 ค้นหาคำศัพท์ (OpenRouter)"
@@ -1244,8 +1313,8 @@ ToggleOpenRouterTester = function()
     local ResultScroll = Instance.new("ScrollingFrame")
     ResultScroll.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
     ResultScroll.BorderSizePixel = 0
-    ResultScroll.Position = UDim2.new(0, 15, 0, 215)
-    ResultScroll.Size = UDim2.new(1, -30, 0, 210)
+    ResultScroll.Position = UDim2.new(0, 15, 0, 285)
+    ResultScroll.Size = UDim2.new(1, -30, 0, 205)
     ResultScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
     ResultScroll.ScrollBarThickness = 6
     ResultScroll.Parent = MainFrame
@@ -1267,7 +1336,7 @@ ToggleOpenRouterTester = function()
     LoadingLabel.Size = UDim2.new(1, -20, 0, 30)
     LoadingLabel.Position = UDim2.new(0, 10, 0, 5)
     LoadingLabel.Font = Enum.Font.Gotham
-    LoadingLabel.Text = "พร้อมใช้งาน - ใช้ API Key จากระบบ"
+    LoadingLabel.Text = "พร้อมใช้งาน - ใส่/แก้ API Key ได้จากช่องด้านบน"
     LoadingLabel.TextColor3 = Color3.fromRGB(150, 150, 160)
     LoadingLabel.TextSize = 12
     LoadingLabel.TextWrapped = true
@@ -1278,19 +1347,23 @@ ToggleOpenRouterTester = function()
         if isSearching then return end
         isSearching = true
         SearchButton.Text = "⏳ กำลังค้นหา..."
-        
+
         -- Clear old results
         for _, child in ipairs(ResultScroll:GetChildren()) do
             if child:IsA("Frame") then child:Destroy() end
         end
         LoadingLabel.Visible = true
+        RefreshOpenRouterKeys(KeyInput.Text)
+        UserConfig.OpenRouterKeys = OpenRouterKeyText
+        SaveUserConfig()
+        InfoLabel.Text = "Model: " .. selectedRouterModel .. " | Keys: " .. tostring(#OpenRouterKeys) .. " | Active: " .. MaskOpenRouterKey(OpenRouterKeys[currentRouterKeyIndex])
         LoadingLabel.Text = "Connecting to OpenRouter..."
 
-        local prefix = LetterInput.Text:lower():match("^%s*(.-)%s*$")
+        local prefix = TrimText(LetterInput.Text):lower()
         local words = FetchWordsFromOpenRouter(prefix) -- Uses global function
-        
+
         LoadingLabel.Visible = false
-        
+
         if words and #words > 0 then
             for i, word in ipairs(words) do
                 local Card = Instance.new("Frame")
@@ -1298,7 +1371,7 @@ ToggleOpenRouterTester = function()
                 Card.Size = UDim2.new(1, -10, 0, 40)
                 Card.Parent = ResultScroll
                 local cc = Instance.new("UICorner") cc.CornerRadius = UDim.new(0,6) cc.Parent = Card
-                
+
                 local wl = Instance.new("TextLabel")
                 wl.BackgroundTransparency = 1
                 wl.Position = UDim2.new(0, 10, 0, 0)
@@ -1334,7 +1407,7 @@ ToggleOllamaGui = function()
     ollamaAiGui = ScreenGui
 
     local Frame = Instance.new("Frame")
-    Frame.Size = UDim2.new(0, 350, 0, 320) 
+    Frame.Size = UDim2.new(0, 350, 0, 320)
     Frame.Position = UDim2.new(0.5, -175, 0.5, -160)
     Frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
     Frame.BorderSizePixel = 0
@@ -1406,7 +1479,7 @@ ToggleOllamaGui = function()
     GenerateBtn.MouseButton1Click:Connect(function()
         local apiUrl = OllamaApiUrl
         local letters = LetterInput.Text
-        
+
         if not apiUrl or apiUrl == "" or apiUrl == "YOUR_STATIC_API_URL_HERE" then
             ResultLabel.Text = "❌ กรุณาใส่ URL ในช่องตั้งค่าหน้า Main ก่อน!"
             return
@@ -1415,9 +1488,9 @@ ToggleOllamaGui = function()
             ResultLabel.Text = "❌ กรุณาพิมพ์ตัวอักษรที่ต้องการหาก่อนครับ!"
             return
         end
-        
+
         ResultLabel.Text = "⏳ กำลังทดสอบเชื่อมต่อ...\nURL: " .. apiUrl
-        
+
         apiUrl = apiUrl:match("^%s*(.-)%s*$")
         if not apiUrl:find("/generate") then
              if apiUrl:sub(-1) == "/" then
@@ -1448,11 +1521,11 @@ ToggleOllamaGui = function()
                 })
             })
         end)
-        
+
         if success and response.StatusCode == 200 then
             local data = HttpService:JSONDecode(response.Body)
             local outputText = ""
-            
+
             if data.status == "success" then
                 for char, words in pairs(data.data) do
                     outputText = outputText .. "หมวด [" .. char .. "]:\n"
@@ -1547,9 +1620,9 @@ end
 local function FetchWordsFromAPI(prefix)
     if not prefix or #prefix == 0 then return nil end
     local minLen = GetTargetMinLength(prefix)
-    
+
     local words = {}
-    
+
     local url = "https://api.datamuse.com/words?sp=" .. prefix .. "*&max=20"
     local success, response = pcall(function()
         return game:HttpGet(url)
@@ -1565,7 +1638,7 @@ local function FetchWordsFromAPI(prefix)
             end
         end
     end
-    
+
     if #words < 5 then
         local url2 = "https://api.datamuse.com/sug?s=" .. prefix .. "&max=20"
         local success2, response2 = pcall(function() return game:HttpGet(url2) end)
@@ -1598,16 +1671,20 @@ end
 
 FetchWordsFromOpenRouter = function(prefix)
     if not prefix or #prefix == 0 then return nil end
-    
-    -- API Rotation Logic
-    local apiKey = OpenRouterKeys[currentRouterKeyIndex]
-    if isOpenRouterRotation then
-        currentRouterKeyIndex = (currentRouterKeyIndex % #OpenRouterKeys) + 1
+
+    RefreshOpenRouterKeys(OpenRouterKeyText)
+    if not request then
+        Rayfield:Notify({Title="OpenRouter Error", Content="Executor นี้ไม่มี request/http_request", Duration=3})
+        return nil
     end
-    
+    if #OpenRouterKeys == 0 then
+        Rayfield:Notify({Title="OpenRouter API Key", Content="กรุณาใส่ API Key ใน UI ก่อนใช้งาน", Duration=4})
+        return nil
+    end
+
     local minLen = GetTargetMinLength(prefix)
     local count = openRouterWordCount or 5
-    
+
     local prompt = string.format([[
 You are a word game assistant. Find exactly %d common English words that:
 - Start with "%s"
@@ -1621,47 +1698,52 @@ Return ONLY a JSON array of strings, like this:
 No explanations. Just the JSON array.
 ]], count, prefix:lower(), minLen > 0 and minLen or 3, maxLength)
 
-    local success, response = pcall(function()
-        return request({
-            Url = "https://openrouter.ai/api/v1/chat/completions",
-            Method = "POST",
-            Headers = {
-                ["Content-Type"] = "application/json",
-                ["Authorization"] = "Bearer " .. apiKey,
-                ["HTTP-Referer"] = "https://github.com/999solver",
-                ["X-Title"] = "999 Word Solver"
-            },
-            Body = HttpService:JSONEncode({
-                model = selectedRouterModel,
-                messages = {
-                    {
-                        role = "user",
-                        content = prompt
-                    }
+    local response = nil
+    local success = false
+    local attempts = isOpenRouterRotation and #OpenRouterKeys or 1
+    for _ = 1, attempts do
+        local apiKey = OpenRouterKeys[currentRouterKeyIndex]
+        success, response = pcall(function()
+            return request({
+                Url = "https://openrouter.ai/api/v1/chat/completions",
+                Method = "POST",
+                Headers = {
+                    ["Content-Type"] = "application/json",
+                    ["Authorization"] = "Bearer " .. apiKey,
+                    ["HTTP-Referer"] = "https://github.com/999solver",
+                    ["X-Title"] = "999 Word Solver"
                 },
-                temperature = 0.7,
-                max_tokens = 200
+                Body = HttpService:JSONEncode({
+                    model = selectedRouterModel,
+                    messages = {{ role = "user", content = prompt }},
+                    temperature = 0.45,
+                    max_tokens = 160
+                })
             })
-        })
-    end)
-    
-    if not success or response.StatusCode ~= 200 then
-        warn("OpenRouter API Failed", response)
-        return nil
+        end)
+        if success and response and response.StatusCode == 200 then break end
+        warn("OpenRouter API Failed for key", MaskOpenRouterKey(apiKey), response)
+        currentRouterKeyIndex = (currentRouterKeyIndex % #OpenRouterKeys) + 1
     end
-    
-    local data = HttpService:JSONDecode(response.Body)
+    if isOpenRouterRotation then
+        currentRouterKeyIndex = (currentRouterKeyIndex % #OpenRouterKeys) + 1
+    end
+
+    if not success or not response or response.StatusCode ~= 200 then return nil end
+
+    local decodeOk, data = pcall(function() return HttpService:JSONDecode(response.Body) end)
+    if not decodeOk then return nil end
     if not data.choices or not data.choices[1] or not data.choices[1].message then return nil end
-    
+
     local content = data.choices[1].message.content
     local jsonStart = content:find("%[")
     local jsonEnd = content:find("%]")
-    
+
     if not jsonStart or not jsonEnd then return nil end
     local jsonText = content:sub(jsonStart, jsonEnd)
-    
+
     local success2, wordList = pcall(function() return HttpService:JSONDecode(jsonText) end)
-    
+
     if success2 and wordList and #wordList > 0 then
         local validWords = {}
         for _, w in ipairs(wordList) do
@@ -1681,18 +1763,18 @@ end
 
 local function FetchWordsFromOllama(prefix)
     if not prefix or #prefix == 0 then return nil end
-    if not OllamaApiUrl or OllamaApiUrl == "" or OllamaApiUrl == "YOUR_STATIC_API_URL_HERE" then 
+    if not OllamaApiUrl or OllamaApiUrl == "" or OllamaApiUrl == "YOUR_STATIC_API_URL_HERE" then
         Rayfield:Notify({Title="Ollama Error", Content="กรุณาใส่ Ollama API URL ในหน้าตั้งค่า", Duration=3})
-        return nil 
+        return nil
     end
-    
+
     local minLen = GetTargetMinLength(prefix)
     local cleanUrl = OllamaApiUrl:match("^%s*(.-)%s*$")
     if not cleanUrl:find("/generate") then
          if cleanUrl:sub(-1) == "/" then cleanUrl = cleanUrl .. "generate"
          else cleanUrl = cleanUrl .. "/generate" end
     end
-    
+
     local excluded = {}
     for word, _ in pairs(UsedWordsHistory) do
         if word:sub(1, #prefix):lower() == prefix:lower() then
@@ -1701,8 +1783,8 @@ local function FetchWordsFromOllama(prefix)
     end
 
     local success, response = pcall(function()
-        return request({ 
-            Url = cleanUrl, 
+        return request({
+            Url = cleanUrl,
             Method = "POST",
             Headers = {
                 ["Content-Type"] = "application/json"
@@ -1714,7 +1796,7 @@ local function FetchWordsFromOllama(prefix)
             })
         })
     end)
-    
+
     if success and response.StatusCode == 200 then
         local data = HttpService:JSONDecode(response.Body)
         local words = {}
@@ -1730,11 +1812,11 @@ local function FetchWordsFromOllama(prefix)
                  end
             end
         end
-        if #words > 0 then 
-            if showApiWordList and UpdateApiWordListGui then 
-                UpdateApiWordListGui(words) 
+        if #words > 0 then
+            if showApiWordList and UpdateApiWordListGui then
+                UpdateApiWordListGui(words)
             end
-            return words 
+            return words
         end
     end
     return nil
@@ -1742,7 +1824,7 @@ end
 
 local function GetUnusedAPIWord()
     if not lastAPIWords or #lastAPIWords == 0 then return nil end
-    
+
     if isHardMode then
         local hardEndings = {x=true, z=true, q=true, j=true, v=true, k=true}
         for _, word in ipairs(lastAPIWords) do
@@ -1761,7 +1843,7 @@ local function GetUnusedAPIWord()
         local shortest = nil
         local shortestLen = 9999
         local minLenCfg = tonumber(apiLeastPickMinLen) or 0
-        
+
         for _, word in ipairs(lastAPIWords) do
             if not usedAPIWords[word] and IsValidWord(word) then
                 if #word >= minLenCfg then
@@ -1772,7 +1854,7 @@ local function GetUnusedAPIWord()
                 end
             end
         end
-        
+
         if shortest then
             usedAPIWords[shortest] = true
             return shortest
@@ -1800,7 +1882,7 @@ local function findWordFromDatabase(prefix)
             end
         end
     end
-    
+
     if isHardMode and #candidates > 0 then
          local hardEndings = {x=true, z=true, q=true, j=true, v=true, k=true}
          local hardCandidates = {}
@@ -1829,7 +1911,7 @@ local function findWordFromCustomDatabase(prefix)
             end
         end
     end
-    
+
     if isHardMode and #candidates > 0 then
          local hardEndings = {x=true, z=true, q=true, j=true, v=true, k=true}
          local hardCandidates = {}
@@ -1843,13 +1925,13 @@ local function findWordFromCustomDatabase(prefix)
              return hardCandidates[math.random(1, #hardCandidates)]
          end
     end
-    
+
     return #candidates > 0 and candidates[math.random(1, #candidates)] or nil
 end
 
 local function TryGetWordFromSource(sourceName, prefix)
     if sourceName == "None" then return nil end
-    
+
     if sourceName == "Saved Words (Persistent)" then
         return FindInSavedWords(prefix), "saved"
     elseif sourceName == "API (Datamuse)" then
@@ -1881,7 +1963,7 @@ findWord = function(prefix)
     local minLen = GetTargetMinLength(prefix)
     local resultWord = nil
     local resultSource = nil
-    
+
     if useSavedWordsFirst then
         local saved = FindInSavedWords(prefix)
         if saved then
@@ -1901,7 +1983,7 @@ findWord = function(prefix)
             end
         end
     end
-    
+
     if not resultWord then
         local verb = FindSuitableVerb(prefix)
         if verb then
@@ -1909,7 +1991,7 @@ findWord = function(prefix)
             resultSource = "verb_fallback"
         end
     end
-    
+
     if showDecisionLog then UpdateDecisionLogGui(prefix, minLen, resultWord or "None") end
     return resultWord, resultSource
 end
@@ -2021,11 +2103,11 @@ local function CheckHighlightColor()
     for _, obj in pairs(Character:GetDescendants()) do
         if obj:IsA("Highlight") and obj.Enabled then
             local isInvisible = (obj.FillTransparency >= 0.95) and (obj.OutlineTransparency >= 0.95)
-            
+
             if not isInvisible then
                 local hColor = obj.FillColor
                 local r, g, b = hColor.R, hColor.G, hColor.B
-                
+
                 if r > UI_CONFIG.RedThreshold and g < 0.4 then
                     return "red"
                 elseif g > UI_CONFIG.GreenThreshold and r < 0.4 then
@@ -2036,14 +2118,14 @@ local function CheckHighlightColor()
             end
         end
     end
-    
+
     return nil
 end
 
 local function CheckOtherPlayerHighlight(playerName)
     local player = Players:FindFirstChild(playerName)
     if not player or not player.Character then return nil end
-    
+
     for _, obj in pairs(player.Character:GetDescendants()) do
         if obj:IsA("Highlight") and obj.Enabled then
             local isInvisible = (obj.FillTransparency >= 0.95) and (obj.OutlineTransparency >= 0.95)
@@ -2071,22 +2153,22 @@ StopHighlightDetection = function()
 end
 
 StartHighlightDetection = function(wordToCheck)
-    StopHighlightDetection() 
-    
+    StopHighlightDetection()
+
     highlightDetectionActive = true
     detectionStartTime = tick()
-    
+
     highlightConnection = RunService.RenderStepped:Connect(function()
         if not highlightDetectionActive then return end
-        
+
         -- Default Timeout (5s)
         if tick() - detectionStartTime > DETECTION_TIMEOUT then
             StopHighlightDetection()
-            isProcessing = false 
+            isProcessing = false
             isWaitingForOtherPlayer = true
             return
         end
-        
+
         -- Custom Failsafe: 1.0s No Highlight Check (Directive)
         if tick() - detectionStartTime > DETECTION_STUCK_TIMEOUT then
              local isMyTurn, _ = checkIfMyTurn()
@@ -2094,16 +2176,16 @@ StartHighlightDetection = function(wordToCheck)
                  -- If 1 second passed and still no highlight but it's my turn
                  -- assume glitch or lag, remove word and retry
                  StopHighlightDetection()
-                 
+
                  MarkWordAsWrong(wordToCheck) -- Temporarily mark wrong so findWord picks new
-                 
+
                  Rayfield:Notify({
                      Title = "⚠️ No Highlight (1s Timeout)",
                      Content = "ไม่พบ Highlight ใน 1 วิ -> เปลี่ยนคำใหม่...",
                      Duration = 2,
                      Image = 4483362458
                  })
-                 
+
                  task.spawn(function()
                      deleteAllText()
                      task.wait(0.1)
@@ -2127,21 +2209,21 @@ StartHighlightDetection = function(wordToCheck)
         end
 
         local color = CheckHighlightColor()
-        
+
         if color == "red" then
             StopHighlightDetection()
             AddToBlacklist(wordToCheck)
             MarkWordAsWrong(wordToCheck)
-            
+
             SendSmartChat("Fail")
             UpdatePlayerESP(LocalPlayer, "WRONG!", Color3.fromRGB(255, 50, 50), wordToCheck:upper())
-            
+
             Rayfield:Notify({
                 Title = "🔴 ตรวจพบคำผิด (Highlight)!",
                 Content = "คำ: " .. wordToCheck:upper() .. "\n🚫 เพิ่มเข้า Blacklist ถาวร",
                 Duration = 4,
             })
-            
+
             task.spawn(function()
                 task.wait(0.5)
                 deleteAllText()
@@ -2160,15 +2242,15 @@ StartHighlightDetection = function(wordToCheck)
                     isWaitingForOtherPlayer = true
                 end
             end)
-            
+
         elseif color == "green" then
             StopHighlightDetection()
             MarkWordAsUsed(wordToCheck)
             AddToVerifiedWords(wordToCheck)
-            
+
             SendSmartChat("Success")
             UpdatePlayerESP(LocalPlayer, "CORRECT!", Color3.fromRGB(50, 255, 50), wordToCheck:upper())
-            
+
             Rayfield:Notify({
                 Title = "✅ คำถูกต้อง!",
                 Content = "คำ: " .. wordToCheck:upper() .. "\n💾 บันทึกแล้ว",
@@ -2188,15 +2270,15 @@ end
 StartOtherPlayerDetection = function()
     if otherPlayerConnection then return end
     isOtherPlayerDetectionActive = true
-    
+
     otherPlayerConnection = RunService.Heartbeat:Connect(function()
         if not isOtherPlayerDetectionActive then return end
-        
+
         local turnPlayerName = GetCurrentTurnPlayerName()
-        
+
         if turnPlayerName then
             currentTurnPlayerName = turnPlayerName
-            
+
             if isSmartVisualsActive then
                 local playerObj = Players:FindFirstChild(turnPlayerName)
                 if playerObj then
@@ -2207,33 +2289,33 @@ StartOtherPlayerDetection = function()
                     end
                 end
             end
-            
+
             if turnPlayerName ~= LocalPlayer.Name then
                 local boardWord = extractWordFromGame()
                 if boardWord and #boardWord > 0 then
                     currentBoardTextBuffer = boardWord
                 end
-                
+
                 local color = CheckOtherPlayerHighlight(turnPlayerName)
-                
+
                 if color == "green" then
                     if currentBoardTextBuffer and #currentBoardTextBuffer > 1 then
                         local capturedWord = currentBoardTextBuffer:lower()
-                        
+
                         if lastOtherPlayerWord ~= capturedWord then
                             lastOtherPlayerWord = capturedWord
                             MarkWordAsUsed(capturedWord)
-                            
+
                             local pObj = Players:FindFirstChild(turnPlayerName)
                             UpdatePlayerESP(pObj, "PLAYED", Color3.fromRGB(100, 255, 100), capturedWord:upper())
-                            
+
                             Rayfield:Notify({
                                 Title = "👤 เก็บตกคำจากผู้เล่นอื่น!",
                                 Content = "ผู้เล่น: " .. turnPlayerName .. "\nคำ: " .. capturedWord:upper() .. "\n💾 บันทึกลง Used History แล้ว",
                                 Duration = 3,
                                 Image = 4483362458
                             })
-                            
+
                             if UpdateTurnStatusGui then
                                 UpdateTurnStatusGui(turnPlayerName, capturedWord)
                             end
@@ -2267,73 +2349,73 @@ end
 --------------------------------------------------------------
 autoType = function(prefix, fullWord, isAutoMode, source)
     StopHighlightDetection()
-    
+
     local remaining = fullWord:sub(#prefix + 1)
     lastTypedLength = #fullWord
     lastTypedOrSentWord = fullWord
     lastTypedOrSentWordTime = tick()
-    
+
     local thisRunId = HttpService:GenerateGUID(false)
     activeRunId = thisRunId
-    
+
     task.spawn(function()
         if startDelay > 0 then
             UpdatePlayerESP(LocalPlayer, "WAITING...", Color3.fromRGB(255, 200, 0), "Delay: " .. startDelay .. "s")
             task.wait(startDelay)
         end
-        
+
         if activeRunId ~= thisRunId then return end
-        
+
         UpdatePlayerESP(LocalPlayer, "TYPING...", Color3.fromRGB(50, 150, 255), fullWord:upper())
-        
+
         for i = 1, #remaining do
             if activeRunId ~= thisRunId then return end
             local char = remaining:sub(i,i):upper()
-            
+
             local codeToSend = Enum.KeyCode[char]
             if char == "Y" then codeToSend = Enum.KeyCode.Z
             elseif char == "Z" then codeToSend = Enum.KeyCode.Y
             end
-            
+
             pcall(function()
                 VirtualInputManager:SendKeyEvent(true, codeToSend, false, game)
                 if not isSuperFastMode then task.wait(0.01) end
                 VirtualInputManager:SendKeyEvent(false, codeToSend, false, game)
             end)
-            
+
             if not isSuperFastMode then task.wait(getRandomDelay(baseTypeSpeed)) end
         end
-        
+
         if activeRunId ~= thisRunId then return end
-        
+
         if ErrorDetectionMethod == "highlight" then
             StartHighlightDetection(fullWord)
         end
-        
+
         if not isSuperFastMode then task.wait(getRandomDelay(0.1)) end
         if activeRunId ~= thisRunId then return end
-        
+
         VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
         if not isSuperFastMode then task.wait(0.03) end
         VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
-        
+
         lastTypedOrSentWord = fullWord
         lastTypedOrSentWordTime = tick()
 
         local badge = ({api="🌐", database="💾", verb_fallback="⚡", custom_db="📂", saved="⭐", ollama_api="🤖", openrouter="🧠"})[source or ""] or ""
         local srcName = ({
-            api="API (Datamuse)", 
-            database="Database", 
-            verb_fallback="VERB Fallback", 
+            api="API (Datamuse)",
+            database="Database",
+            verb_fallback="VERB Fallback",
             saved="Saved Words",
             custom_db="Custom DB",
             ollama_api="Ollama AI",
             openrouter="OpenRouter AI"
         })[source or ""] or "?"
-        
+
         local info = ""
         if source == "openrouter" then info = "\nModel: " .. selectedRouterModel end
-        
+
         Rayfield:Notify({
             Title = "พิมพ์สำเร็จ! " .. badge,
             Content = string.format("คำ: %s\nที่มา: %s%s\nความยาว: %d\n✨ รอผล Highlight...",
@@ -2341,17 +2423,17 @@ autoType = function(prefix, fullWord, isAutoMode, source)
             Duration = 3,
             Image = 4483362458,
         })
-        
+
         UpdatePlayerESP(LocalPlayer, "SENT", Color3.fromRGB(200, 200, 255), fullWord:upper())
 
         if ErrorDetectionMethod == "highlight" then
-            return 
+            return
         end
 
         if isAutoMode then
             task.wait(1)
             if activeRunId ~= thisRunId then return end
-            
+
             local stillMyTurn, _ = checkIfMyTurn()
             if stillMyTurn then
                 apiAttemptCount = apiAttemptCount + 1
@@ -2388,7 +2470,7 @@ end
 
 local function RunAutoLogic()
     if isProcessing then return end
-    
+
     for i=1,3 do
         local s = SourcePriorities[i]
         if s == "Database (Built-in)" and not isDBLoaded then
@@ -2402,18 +2484,18 @@ local function RunAutoLogic()
     isProcessing = true
     apiAttemptCount = 0
     usedAPIWords = {}
-    
+
     UpdatePlayerESP(LocalPlayer, "SEARCHING...", Color3.fromRGB(255, 255, 0), "...")
 
     local extracted = extractWordFromGame()
     if extracted and #extracted > 0 then
         local needApi = false
         for i=1,3 do if SourcePriorities[i] == "API (Datamuse)" then needApi = true break end end
-        
+
         if needApi then
             lastAPIWords = FetchWordsFromAPI(extracted)
         end
-        
+
         local foundWord, source = findWord(extracted)
         if foundWord then
             autoType(extracted, foundWord, false, source)
@@ -2446,16 +2528,16 @@ local function StartAutoPlay()
         Duration = 4,
         Image = 4483362458,
     })
-    
+
     if isOtherPlayerDetectionActive then
         StartOtherPlayerDetection()
     end
-    
+
     SendSmartChat("Greeting")
-    
+
     autoPlayConnection = RunService.Heartbeat:Connect(function()
         if not isAutoPlayActive or isProcessing then return end
-        
+
         for i=1,3 do
             local s = SourcePriorities[i]
             if s == "Database (Built-in)" and not isDBLoaded then return end
@@ -2472,11 +2554,11 @@ local function StartAutoPlay()
             isProcessing = true
             apiAttemptCount = 0
             usedAPIWords = {}
-            
+
             UpdatePlayerESP(LocalPlayer, "AUTO PLAY", Color3.fromRGB(0, 255, 255), "...")
-            
+
             local extracted = nil
-            for _ = 1, 10 do 
+            for _ = 1, 10 do
                 extracted = extractWordFromGame()
                 if extracted and #extracted > 0 then break end
                 task.wait(0.05)
@@ -2588,20 +2670,20 @@ end
 
 local function ScanWorkspaceAndRS()
     if not canWriteFiles then return end
-    
+
     Rayfield:Notify({
         Title = "กำลังสแกน... 🔍",
         Content = "กำลังวิเคราะห์ Workspace + ReplicatedStorage",
         Duration = 3,
     })
-    
+
     local containers = {
         {name = "Workspace", object = workspace},
         {name = "ReplicatedStorage", object = ReplicatedStorage}
     }
-    
+
     local logData = {}
-    
+
     for _, item in ipairs(containers) do
         local containerName = item.name
         local container = item.object
@@ -2612,12 +2694,12 @@ local function ScanWorkspaceAndRS()
             end
         end
     end
-    
+
     local filename = "workspace_and_rs_log.txt"
     local success = pcall(function()
         writefile(filename, table.concat(logData, "\n"))
     end)
-    
+
     if success then
         Rayfield:Notify({
             Title = "สแกนสำเร็จ! ✅",
@@ -2854,8 +2936,20 @@ MainTab:CreateInput({
     end
 })
 
+MainTab:CreateInput({
+    Name = "🔑 OpenRouter API Key(s)",
+    PlaceholderText = "sk-or-v1-... (ใส่หลาย key คั่นด้วย comma/space)",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(txt)
+        local total = RefreshOpenRouterKeys(txt)
+        UserConfig.OpenRouterKeys = OpenRouterKeyText
+        SaveUserConfig()
+        Rayfield:Notify({Title="OpenRouter Keys Updated", Content="บันทึกแล้ว " .. tostring(total) .. " key(s)", Duration=2})
+    end
+})
+
 MainTab:CreateToggle({
-    Name = "🔄 API Key Distribution (วนลูป 3 คีย์)",
+    Name = "🔄 API Key Distribution (วนลูป API Keys)",
     CurrentValue = isOpenRouterRotation,
     Flag = "OpenRouterRotation",
     Callback = function(v)
@@ -2958,7 +3052,7 @@ MainTab:CreateToggle({
         showTurnStatusUI = v
         UserConfig.TurnStatusUIToggle = v
         SaveUserConfig()
-        if v then UpdateTurnStatusGui(currentTurnPlayerName, lastOtherPlayerWord) 
+        if v then UpdateTurnStatusGui(currentTurnPlayerName, lastOtherPlayerWord)
         elseif turnStatusGui then turnStatusGui.Enabled = false end
     end
 })
@@ -3044,8 +3138,8 @@ MainTab:CreateButton({
     Callback = function()
         Rayfield:Notify({
             Title = "📊 สถิติการใช้คำ",
-            Content = string.format("ใช้รอบนี้: %d คำ\nSaved Words: %d คำ (ถาวร)\nคำผิด: %d คำ\n🚫 Blacklist: %d คำ", 
-                GetUsedWordsCount(), GetVerifiedWordsCount(), GetWrongWordsCount(), GetBlacklistCount()), 
+            Content = string.format("ใช้รอบนี้: %d คำ\nSaved Words: %d คำ (ถาวร)\nคำผิด: %d คำ\n🚫 Blacklist: %d คำ",
+                GetUsedWordsCount(), GetVerifiedWordsCount(), GetWrongWordsCount(), GetBlacklistCount()),
             Duration = 5,
             Image = 4483362458,
         })
@@ -3113,7 +3207,7 @@ BlacklistTab:CreateButton({
         end
         print("Total: " .. count .. " words")
         print("================================")
-        
+
         Rayfield:Notify({
             Title = "📋 Blacklist",
             Content = "พิมพ์รายการไปที่ Console แล้ว\nจำนวน: " .. count .. " คำ",
@@ -3382,7 +3476,7 @@ readfile: %s
 
 สถานะ: %s
 
-หมายเหตุ: ถ้า Executor ไม่รองรับ writefile/readfile ระบบจะทำงานแบบไม่บันทึกไฟล์]], 
+หมายเหตุ: ถ้า Executor ไม่รองรับ writefile/readfile ระบบจะทำงานแบบไม่บันทึกไฟล์]],
         canWriteFiles and "✅ รองรับ" or "❌ ไม่รองรับ",
         canReadFiles and "✅ รองรับ" or "❌ ไม่รองรับ",
         fileStatusText)
@@ -3453,7 +3547,7 @@ end)
 
 -- Load Database Async (Secondary)
 task.spawn(function()
-    task.wait(2) 
+    task.wait(2)
     local success, result = pcall(game.HttpGet, game, "https://raw.githubusercontent.com/napol/100000-English-Words/master/words.txt")
     if success then
         local added = 0
@@ -3493,7 +3587,7 @@ task.spawn(function()
             Duration = 4
         })
     else
-        isCustomDBLoaded = true 
+        isCustomDBLoaded = true
         Rayfield:Notify({
             Title = "Custom DB ล้มเหลว",
             Content = "ไม่สามารถโหลด Custom Database ได้",
