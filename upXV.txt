@@ -240,6 +240,13 @@ end
 
 LoadUserConfig()
 
+local function ClampNumber(value, minValue, maxValue)
+    local n = tonumber(value) or minValue
+    if n < minValue then return minValue end
+    if n > maxValue then return maxValue end
+    return n
+end
+
 local baseTypeSpeed = UserConfig.baseTypeSpeed or 0.08
 local deleteSpeed = UserConfig.deleteSpeed or 0.05
 local maxLength = UserConfig.maxLength or 12
@@ -258,6 +265,8 @@ OpenRouterApiKeys[1] = UserConfig.OpenRouterApiKey1 or ""
 OpenRouterApiKeys[2] = UserConfig.OpenRouterApiKey2 or ""
 OpenRouterApiKeys[3] = UserConfig.OpenRouterApiKey3 or ""
 OpenRouterModel = UserConfig.OpenRouterModel or OpenRouterModel
+OpenRouterKeyCount = ClampNumber(UserConfig.OpenRouterKeyCount, 1, 3)
+OpenRouterWordCount = ClampNumber(UserConfig.OpenRouterWordCount, 1, 10)
 OpenRouterKeyCount = math.clamp(tonumber(UserConfig.OpenRouterKeyCount) or 1, 1, 3)
 OpenRouterWordCount = math.clamp(tonumber(UserConfig.OpenRouterWordCount) or 3, 1, 10)
 OpenRouterDebugMode = UserConfig.OpenRouterDebugMode or false
@@ -1381,6 +1390,137 @@ local function GetOpenRouterExcludedWords(prefix)
     return excluded
 end
 
+local function GetOpenRouterActiveSlots()
+    local slots = {}
+    local selectedCount = ClampNumber(OpenRouterKeyCount, 1, 3)
+    for i = 1, selectedCount do
+        local key = OpenRouterApiKeys[i]
+        if key and key:match("%S") then
+            table.insert(slots, i)
+        end
+    end
+    -- Single-key friendly fallback: if user only fills any one box, use it even when the dropdown was mis-set.
+    if #slots == 0 then
+        for i = 1, 3 do
+            local key = OpenRouterApiKeys[i]
+            if key and key:match("%S") then
+                table.insert(slots, i)
+                break
+            end
+        end
+    end
+    return slots
+end
+
+local function GetNextOpenRouterKey()
+    local slots = GetOpenRouterActiveSlots()
+    if #slots == 0 then return nil, nil end
+    openRouterKeyCursor = (openRouterKeyCursor % #slots) + 1
+    local slotIndex = slots[openRouterKeyCursor]
+    return OpenRouterApiKeys[slotIndex], slotIndex, #slots
+end
+
+local function ExtractOpenRouterWordsFromParsed(parsed)
+    if type(parsed) ~= "table" then return nil end
+    if type(parsed.words) == "table" then return parsed.words end
+    if type(parsed.data) == "table" then return parsed.data end
+    if type(parsed.result) == "table" then return parsed.result end
+    if #parsed > 0 then return parsed end
+    return nil
+end
+
+FetchWordsFromOllama = function(prefix)
+    if not prefix or #prefix == 0 then return nil end
+    if not request then
+        Rayfield:Notify({Title="OpenRouter Error", Content="Executor นี้ไม่รองรับ request/http_request", Duration=3})
+        return nil
+    end
+
+    local minLen = GetTargetMinLength(prefix)
+    local excluded = GetOpenRouterExcludedWords(prefix)
+    local excludedText = (#excluded > 0) and table.concat(excluded, ", ") or "none"
+    local hardText = isHardMode and "Prefer real English words ending with difficult letters: x, z, q, j, v, k. If impossible, return best valid alternatives." or "Prefer common real English words."
+    local prompt = string.format([[Return ONLY valid minified JSON. Schema: {"words":["word1","word2"]}. Need exactly %d unique real English words that start with "%s", length between %d and %d, lowercase alphabetic a-z only. Do not include these already used words: %s. %s]], OpenRouterWordCount, prefix:lower(), math.max(minLen, #prefix), maxLength, excludedText, hardText)
+
+    OpenRouterLastRawResponse = ""
+    OpenRouterLastParsedContent = ""
+
+    local words = {}
+    local activeSlots = GetOpenRouterActiveSlots()
+    for attempt = 1, math.max(#activeSlots, 1) do
+        local apiKey, keyIndex, activeKeyCount = GetNextOpenRouterKey()
+        if not apiKey then
+            Rayfield:Notify({Title="OpenRouter Error", Content="กรุณาใส่ API Key อย่างน้อย 1 ช่อง", Duration=3})
+            return nil
+        end
+
+        local payload = {
+            model = OpenRouterModel,
+            messages = {
+                {role = "system", content = "You generate word-game answers. Output JSON only. No markdown, no explanation."},
+                {role = "user", content = prompt}
+            },
+            temperature = isHardMode and 0.35 or 0.2,
+            max_tokens = 180
+        }
+
+        local success, response = pcall(function()
+            return request({
+                Url = OpenRouterApiUrl,
+                Method = "POST",
+                Headers = {
+                    ["Content-Type"] = "application/json",
+                    ["Authorization"] = "Bearer " .. apiKey,
+                    ["HTTP-Referer"] = "https://roblox.com",
+                    ["X-Title"] = "999 Word Solver"
+                },
+                Body = HttpService:JSONEncode(payload)
+            })
+        end)
+
+        local statusCode = response and (response.StatusCode or response.Status or response.status_code)
+        local body = response and (response.Body or response.body or "") or tostring(response)
+        OpenRouterLastRawResponse = "KEY #" .. tostring(keyIndex) .. " (active " .. tostring(activeKeyCount or 0) .. ") | HTTP " .. tostring(statusCode) .. "\n" .. tostring(body)
+        if OpenRouterDebugMode then
+            print("========== OPENROUTER RAW ==========")
+            print(OpenRouterLastRawResponse)
+            print("========== OPENROUTER PROMPT ==========")
+            print(prompt)
+        end
+
+        if success and statusCode and statusCode >= 200 and statusCode < 300 then
+            local ok, data = pcall(function() return HttpService:JSONDecode(body) end)
+            if ok and data and data.choices and data.choices[1] and data.choices[1].message then
+                local content = data.choices[1].message.content or ""
+                OpenRouterLastParsedContent = content
+                content = content:gsub("```json", ""):gsub("```", ""):match("^%s*(.-)%s*$") or content
+                local jsonOnly = content:match("({.*})") or content
+                local okJson, parsed = pcall(function() return HttpService:JSONDecode(jsonOnly) end)
+                local rawWords = okJson and ExtractOpenRouterWordsFromParsed(parsed) or nil
+                if rawWords then
+                    local seen = {}
+                    for _, raw in ipairs(rawWords) do
+                        local word = tostring(raw):lower():match("^[a-z]+$")
+                        if word and word:sub(1, #prefix) == prefix:lower() and #word >= minLen and #word <= maxLength and not seen[word] and IsValidWord(word) then
+                            table.insert(words, word)
+                            seen[word] = true
+                            if #words >= OpenRouterWordCount then break end
+                        end
+                    end
+                    if #words > 0 then
+                        lastAPIWords = words
+                        if showApiWordList and UpdateApiWordListGui then UpdateApiWordListGui(words) end
+                        Rayfield:Notify({Title="OpenRouter AI", Content="ใช้ Key #"..tostring(keyIndex).." ได้ "..#words.." คำ", Duration=2})
+                        return words
+                    end
+                elseif OpenRouterDebugMode then
+                    warn("OpenRouter JSON parse failed. AI content: " .. tostring(content))
+                end
+            elseif ok and data and data.error then
+                warn("OpenRouter API error: " .. tostring(data.error.message or data.error))
+            end
+        else
+            warn("OpenRouter key #" .. tostring(keyIndex) .. " failed: " .. tostring(statusCode) .. " " .. tostring(body))
 local function GetNextOpenRouterKey()
     for _ = 1, OpenRouterKeyCount do
         openRouterKeyCursor = (openRouterKeyCursor % OpenRouterKeyCount) + 1
@@ -2660,6 +2800,7 @@ MainTab:CreateDropdown({
     end,
 })
 
+MainTab:CreateSection("🤖 OpenRouter AI (รองรับ API Key เดียว)")
 MainTab:CreateSection("🤖 OpenRouter AI (JSON + Multi Key)")
 MainTab:CreateInput({
     Name = "🔑 OpenRouter API Key #1",
@@ -2695,16 +2836,19 @@ MainTab:CreateInput({
     end,
 })
 MainTab:CreateDropdown({
+    Name = "🔁 ใช้กี่ API Key (เลือก 1 ได้ ใช้ Key #1 อันเดียว)",
     Name = "🔁 ใช้กี่ API Key (สลับกันกัน rate limit)",
     Options = {"1", "2", "3"},
     CurrentOption = {tostring(OpenRouterKeyCount)},
     MultipleOptions = false,
     Flag = "OpenRouterKeyCount",
+    Callback = function(Option) OpenRouterKeyCount = ClampNumber(type(Option) == "table" and Option[1] or Option, 1, 3); UserConfig.OpenRouterKeyCount = OpenRouterKeyCount; SaveUserConfig() end,
     Callback = function(Option) OpenRouterKeyCount = tonumber(Option[1]) or 1; UserConfig.OpenRouterKeyCount = OpenRouterKeyCount; SaveUserConfig() end,
 })
 MainTab:CreateInput({
     Name = "📦 จำนวนคำที่รับจาก AI ต่อรอบ",
     PlaceholderText = tostring(OpenRouterWordCount),
+    Callback = function(txt) OpenRouterWordCount = ClampNumber(txt, 1, 10); UserConfig.OpenRouterWordCount = OpenRouterWordCount; SaveUserConfig() end,
     Callback = function(txt) OpenRouterWordCount = math.clamp(tonumber(txt) or 3, 1, 10); UserConfig.OpenRouterWordCount = OpenRouterWordCount; SaveUserConfig() end,
 })
 MainTab:CreateToggle({
@@ -2729,6 +2873,8 @@ MainTab:CreateButton({
 })
     end,
 })
+    end,
+})
 MainTab:CreateDropdown({
     Name = "🔁 ใช้กี่ API Key (สลับกันกัน rate limit)",
     Options = {"1", "2", "3"},
@@ -2748,6 +2894,7 @@ MainTab:CreateButton({
 })
 MainTab:CreateParagraph({
     Title = "ℹ️ วิธีใช้ OpenRouter AI",
+    Content = "ใช้แค่ API Key #1 ช่องเดียวได้เลย แล้วตั้งจำนวน Key เป็น 1\nถ้าใส่ 2-3 key ระบบจะสลับเฉพาะช่องที่มี key จริงเพื่อกัน rate limit\nถ้าดึงคำไม่ได้ให้เปิด Debug แล้วกด Test UI เพื่อดู raw response"
     Content = "เลือก 'OpenRouter AI' ใน Priority แล้วใส่ API Key/Model ได้เอง\nระบบส่งรายการคำที่ใช้แล้วเป็น excluded เช่น apple เพื่อกัน AI ตอบซ้ำในรอบนั้น และบังคับ JSON เพื่อแยกคำได้ปลอดภัย\nถ้าดึงคำไม่ได้ให้เปิด Debug แล้วกด Test UI เพื่อดู raw response"
     Content = "เลือก 'OpenRouter AI' ใน Priority แล้วใส่ API Key/Model ได้เอง\nระบบส่งรายการคำที่ใช้แล้วเป็น excluded เช่น apple เพื่อกัน AI ตอบซ้ำในรอบนั้น และบังคับ JSON เพื่อแยกคำได้ปลอดภัย"
 })
