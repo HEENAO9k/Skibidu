@@ -1231,6 +1231,10 @@ ToggleOllamaGui = function()
             if #raw > 2500 then raw = raw:sub(1, 2500) .. "..." end
             ResultLabel.Text = "❌ ไม่พบคำ / API ตอบไม่ถูกต้อง / Key หมด rate limit\n\nRAW RESPONSE:\n" .. raw
             ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 900)
+            ResultLabel.Text = out
+            ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, (#words + 5) * 20)
+        else
+            ResultLabel.Text = "❌ ไม่พบคำ / API ตอบไม่ถูกต้อง / Key หมด rate limit"
         end
     end)
 end
@@ -1368,6 +1372,12 @@ local function GetOpenRouterExcludedWords(prefix)
             seen[word] = true
         end
     end
+    for word, _ in pairs(usedAPIWords) do
+        if word:sub(1, #prefix):lower() == prefix:lower() and not seen[word] then
+            table.insert(excluded, word)
+            seen[word] = true
+        end
+    end
     return excluded
 end
 
@@ -1404,6 +1414,7 @@ FetchWordsFromOllama = function(prefix)
 
     OpenRouterLastRawResponse = ""
     OpenRouterLastParsedContent = ""
+    local prompt = string.format([[Return ONLY valid minified JSON with this schema: {"words":["word1","word2"]}. Need exactly %d unique real English words that start with "%s", length between %d and %d, lowercase alphabetic a-z only. Do not include these already used words: %s. %s]], OpenRouterWordCount, prefix:lower(), math.max(minLen, #prefix), maxLength, excludedText, hardText)
 
     local words = {}
     for attempt = 1, OpenRouterKeyCount do
@@ -1459,6 +1470,28 @@ FetchWordsFromOllama = function(prefix)
                 if rawWords then
                     local seen = {}
                     for _, raw in ipairs(rawWords) do
+                Body = HttpService:JSONEncode({
+                    model = OpenRouterModel,
+                    messages = {
+                        {role = "system", content = "You generate word-game answers. Output JSON only. No markdown."},
+                        {role = "user", content = prompt}
+                    },
+                    temperature = isHardMode and 0.35 or 0.2,
+                    max_tokens = 160,
+                    response_format = {type = "json_object"}
+                })
+            })
+        end)
+
+        if success and response and response.StatusCode and response.StatusCode >= 200 and response.StatusCode < 300 then
+            local ok, data = pcall(function() return HttpService:JSONDecode(response.Body) end)
+            if ok and data and data.choices and data.choices[1] and data.choices[1].message then
+                local content = data.choices[1].message.content or ""
+                content = content:gsub("```json", ""):gsub("```", ""):match("^%s*(.-)%s*$")
+                local okJson, parsed = pcall(function() return HttpService:JSONDecode(content) end)
+                if okJson and parsed and type(parsed.words) == "table" then
+                    local seen = {}
+                    for _, raw in ipairs(parsed.words) do
                         local word = tostring(raw):lower():match("^[a-z]+$")
                         if word and word:sub(1, #prefix) == prefix:lower() and #word >= minLen and #word <= maxLength and not seen[word] and IsValidWord(word) then
                             table.insert(words, word)
@@ -1480,6 +1513,10 @@ FetchWordsFromOllama = function(prefix)
             end
         else
             warn("OpenRouter key #" .. tostring(keyIndex) .. " failed: " .. tostring(statusCode) .. " " .. tostring(body))
+                end
+            end
+        elseif response and (response.StatusCode == 429 or response.StatusCode == 401 or response.StatusCode == 402) then
+            warn("OpenRouter key #" .. tostring(keyIndex) .. " failed: " .. tostring(response.StatusCode))
         end
     end
 
@@ -2690,6 +2727,21 @@ MainTab:CreateButton({
         print(OpenRouterLastParsedContent ~= "" and OpenRouterLastParsedContent or "ยังไม่มี content")
     end,
 })
+    end,
+})
+MainTab:CreateDropdown({
+    Name = "🔁 ใช้กี่ API Key (สลับกันกัน rate limit)",
+    Options = {"1", "2", "3"},
+    CurrentOption = {tostring(OpenRouterKeyCount)},
+    MultipleOptions = false,
+    Flag = "OpenRouterKeyCount",
+    Callback = function(Option) OpenRouterKeyCount = tonumber(Option[1]) or 1; UserConfig.OpenRouterKeyCount = OpenRouterKeyCount; SaveUserConfig() end,
+})
+MainTab:CreateInput({
+    Name = "📦 จำนวนคำที่รับจาก AI ต่อรอบ",
+    PlaceholderText = tostring(OpenRouterWordCount),
+    Callback = function(txt) OpenRouterWordCount = math.clamp(tonumber(txt) or 3, 1, 10); UserConfig.OpenRouterWordCount = OpenRouterWordCount; SaveUserConfig() end,
+})
 MainTab:CreateButton({
     Name = "🤖 เปิดหน้าต่าง OpenRouter Test UI",
     Callback = function() ToggleOllamaGui() end,
@@ -2697,6 +2749,7 @@ MainTab:CreateButton({
 MainTab:CreateParagraph({
     Title = "ℹ️ วิธีใช้ OpenRouter AI",
     Content = "เลือก 'OpenRouter AI' ใน Priority แล้วใส่ API Key/Model ได้เอง\nระบบส่งรายการคำที่ใช้แล้วเป็น excluded เช่น apple เพื่อกัน AI ตอบซ้ำในรอบนั้น และบังคับ JSON เพื่อแยกคำได้ปลอดภัย\nถ้าดึงคำไม่ได้ให้เปิด Debug แล้วกด Test UI เพื่อดู raw response"
+    Content = "เลือก 'OpenRouter AI' ใน Priority แล้วใส่ API Key/Model ได้เอง\nระบบส่งรายการคำที่ใช้แล้วเป็น excluded เช่น apple เพื่อกัน AI ตอบซ้ำในรอบนั้น และบังคับ JSON เพื่อแยกคำได้ปลอดภัย"
 })
 
 MainTab:CreateSection("API MODE ขั้นเทพ")
