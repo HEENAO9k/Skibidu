@@ -69,8 +69,16 @@ local currentBoardTextBuffer = ""
 local turnStatusGui = nil
 local lastOtherPlayerWord = "None"
 
--- Ollama API Vars
-local OllamaApiUrl = "https://trisyllabic-overambitiously-laney.ngrok-free.dev/generate"
+-- OpenRouter API Vars
+local OpenRouterApiUrl = "https://openrouter.ai/api/v1/chat/completions"
+local OpenRouterApiKeys = {"", "", ""}
+local OpenRouterModel = "openai/gpt-4o-mini"
+local OpenRouterKeyCount = 1
+local OpenRouterWordCount = 3
+local OpenRouterDebugMode = false
+local OpenRouterLastRawResponse = ""
+local OpenRouterLastParsedContent = ""
+local openRouterKeyCursor = 0
 
 -- New Features Vars
 local isMinLengthCheckActive = false
@@ -88,7 +96,7 @@ local SourcePriorities = {
 }
 local AvailableSources = {
     "API (Datamuse)",
-    "Ollama Model",
+    "OpenRouter AI",
     "Database (Built-in)",
     "Custom DB (Amnexe)",
     "Saved Words (Persistent)",
@@ -170,6 +178,7 @@ local deleteAllText
 local UpdatePlayerESP -- New
 local SendSmartChat -- New
 local checkIfMyTurn -- Helper
+local FetchWordsFromOllama -- OpenRouter fetcher (kept name for compatibility)
 
 --------------------------------------------------------------
 -- 2. CONFIGURATION MANAGEMENT
@@ -194,7 +203,13 @@ local UserConfig = {
     UseSavedWordsFirst = true,
     MinLengthCheck = false,    
     DecisionLogToggle = false,
-    OllamaUrl = "",
+    OpenRouterApiKey1 = "",
+    OpenRouterApiKey2 = "",
+    OpenRouterApiKey3 = "",
+    OpenRouterModel = "openai/gpt-4o-mini",
+    OpenRouterKeyCount = 1,
+    OpenRouterWordCount = 3,
+    OpenRouterDebugMode = false,
     OtherPlayerDetection = false,
     TurnStatusUIToggle = false,
     SmartVisuals = false, -- Evolution
@@ -232,11 +247,20 @@ local maxLength = UserConfig.maxLength or 12
 SourcePriorities[1] = UserConfig.SourcePriority1 or "API (Datamuse)"
 SourcePriorities[2] = UserConfig.SourcePriority2 or "Database (Built-in)"
 SourcePriorities[3] = UserConfig.SourcePriority3 or "Custom DB (Amnexe)"
+for i = 1, 3 do
+    if SourcePriorities[i] == "Ollama Model" then
+        SourcePriorities[i] = "OpenRouter AI"
+    end
+end
 isHumanLikeTyping = UserConfig.HumanLikeTyping or false
 
-if UserConfig.OllamaUrl and UserConfig.OllamaUrl ~= "" then
-    OllamaApiUrl = UserConfig.OllamaUrl
-end
+OpenRouterApiKeys[1] = UserConfig.OpenRouterApiKey1 or ""
+OpenRouterApiKeys[2] = UserConfig.OpenRouterApiKey2 or ""
+OpenRouterApiKeys[3] = UserConfig.OpenRouterApiKey3 or ""
+OpenRouterModel = UserConfig.OpenRouterModel or OpenRouterModel
+OpenRouterKeyCount = math.clamp(tonumber(UserConfig.OpenRouterKeyCount) or 1, 1, 3)
+OpenRouterWordCount = math.clamp(tonumber(UserConfig.OpenRouterWordCount) or 3, 1, 10)
+OpenRouterDebugMode = UserConfig.OpenRouterDebugMode or false
 
 local apiLeastPickMode = UserConfig.apiLeastPickMode or false
 local apiLeastPickMinLen = UserConfig.apiLeastPickMinLen or 0
@@ -1101,7 +1125,7 @@ UpdateTurnStatusGui = function(turnName, lastWord)
     end
 end
 
--- === Ollama UI ===
+-- === OpenRouter UI ===
 ToggleOllamaGui = function()
     if CoreGui:FindFirstChild("AiVocabUI_V2") then
         CoreGui.AiVocabUI_V2:Destroy()
@@ -1115,48 +1139,53 @@ ToggleOllamaGui = function()
     ollamaAiGui = ScreenGui
 
     local Frame = Instance.new("Frame")
-    Frame.Size = UDim2.new(0, 350, 0, 320) 
-    Frame.Position = UDim2.new(0.5, -175, 0.5, -160)
-    Frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    Frame.Size = UDim2.new(0, 420, 0, 390)
+    Frame.Position = UDim2.new(0.5, -210, 0.5, -195)
+    Frame.BackgroundColor3 = Color3.fromRGB(18, 20, 30)
     Frame.BorderSizePixel = 0
     Frame.Active = true
     Frame.Draggable = true
     Frame.Parent = ScreenGui
+    Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 14)
+    local stroke = Instance.new("UIStroke", Frame)
+    stroke.Color = Color3.fromRGB(115, 95, 255)
+    stroke.Thickness = 1.5
 
     local Title = Instance.new("TextLabel")
-    Title.Size = UDim2.new(1, 0, 0, 35)
-    Title.Text = "AI Word Generator (Ollama) - Test Mode"
-    Title.BackgroundColor3 = Color3.fromRGB(0, 100, 200)
+    Title.Size = UDim2.new(1, 0, 0, 42)
+    Title.Text = "OpenRouter AI Word Generator - JSON Test"
+    Title.BackgroundColor3 = Color3.fromRGB(85, 70, 220)
     Title.TextColor3 = Color3.new(1,1,1)
     Title.Font = Enum.Font.GothamBold
     Title.TextSize = 16
     Title.Parent = Frame
+    Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 14)
 
     local LetterInput = Instance.new("TextBox")
     LetterInput.Size = UDim2.new(0.9, 0, 0, 35)
-    LetterInput.Position = UDim2.new(0.05, 0, 0.15, 0)
-    LetterInput.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    LetterInput.Position = UDim2.new(0.05, 0, 0, 58)
+    LetterInput.BackgroundColor3 = Color3.fromRGB(32, 35, 50)
     LetterInput.TextColor3 = Color3.new(1,1,1)
-    LetterInput.PlaceholderText = "พิมพ์ตัวอักษรนำหน้า (เช่น: a, b, c)"
+    LetterInput.PlaceholderText = "ตัวอักษรนำหน้า เช่น a / th / pre"
     LetterInput.Text = ""
     LetterInput.Font = Enum.Font.Gotham
     LetterInput.TextSize = 14
     LetterInput.Parent = Frame
 
     local GenerateBtn = Instance.new("TextButton")
-    GenerateBtn.Size = UDim2.new(0.9, 0, 0, 35)
-    GenerateBtn.Position = UDim2.new(0.05, 0, 0.30, 0)
-    GenerateBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
-    GenerateBtn.Text = "ส่งให้ AI หาคำศัพท์"
+    GenerateBtn.Size = UDim2.new(0.9, 0, 0, 36)
+    GenerateBtn.Position = UDim2.new(0.05, 0, 0, 104)
+    GenerateBtn.BackgroundColor3 = Color3.fromRGB(30, 190, 120)
+    GenerateBtn.Text = "ทดสอบดึงคำจาก OpenRouter API"
     GenerateBtn.TextColor3 = Color3.new(1,1,1)
     GenerateBtn.Font = Enum.Font.GothamBold
     GenerateBtn.TextSize = 14
     GenerateBtn.Parent = Frame
 
     local ScrollingFrame = Instance.new("ScrollingFrame")
-    ScrollingFrame.Size = UDim2.new(0.9, 0, 0.53, 0)
-    ScrollingFrame.Position = UDim2.new(0.05, 0, 0.45, 0)
-    ScrollingFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    ScrollingFrame.Size = UDim2.new(0.9, 0, 0, 205)
+    ScrollingFrame.Position = UDim2.new(0.05, 0, 0, 154)
+    ScrollingFrame.BackgroundColor3 = Color3.fromRGB(25, 28, 40)
     ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
     ScrollingFrame.ScrollBarThickness = 6
     ScrollingFrame.Parent = Frame
@@ -1165,8 +1194,8 @@ ToggleOllamaGui = function()
     ResultLabel.Size = UDim2.new(1, -10, 1, 0)
     ResultLabel.Position = UDim2.new(0, 5, 0, 0)
     ResultLabel.BackgroundTransparency = 1
-    ResultLabel.TextColor3 = Color3.fromRGB(255, 255, 100)
-    ResultLabel.Text = "1. ตั้งค่าลิงก์ในหน้า Settings\n2. ใส่ตัวอักษรช่องด้านบน\n3. กดปุ่มสีเขียวเพื่อทดสอบ"
+    ResultLabel.TextColor3 = Color3.fromRGB(215, 230, 255)
+    ResultLabel.Text = "ตั้งค่า API Key / Model / จำนวนคำ ในแท็บหลักก่อน\nAI ต้องตอบ JSON เท่านั้น เช่น {\"words\":[\"apple\"]}"
     ResultLabel.TextXAlignment = Enum.TextXAlignment.Left
     ResultLabel.TextYAlignment = Enum.TextYAlignment.Top
     ResultLabel.TextWrapped = true
@@ -1176,8 +1205,8 @@ ToggleOllamaGui = function()
 
     local CloseBtn = Instance.new("TextButton")
     CloseBtn.Size = UDim2.new(0, 30, 0, 30)
-    CloseBtn.Position = UDim2.new(1, -35, 0, 2)
-    CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    CloseBtn.Position = UDim2.new(1, -36, 0, 6)
+    CloseBtn.BackgroundColor3 = Color3.fromRGB(220, 65, 75)
     CloseBtn.Text = "X"
     CloseBtn.TextColor3 = Color3.new(1,1,1)
     CloseBtn.Font = Enum.Font.GothamBold
@@ -1185,81 +1214,26 @@ ToggleOllamaGui = function()
     CloseBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy() ollamaAiGui = nil end)
 
     GenerateBtn.MouseButton1Click:Connect(function()
-        local apiUrl = OllamaApiUrl
-        local letters = LetterInput.Text
-        
-        if not apiUrl or apiUrl == "" or apiUrl == "YOUR_STATIC_API_URL_HERE" then
-            ResultLabel.Text = "❌ กรุณาใส่ URL ในช่องตั้งค่าหน้า Main ก่อน!"
-            return
-        end
-        if letters == "" then
-            ResultLabel.Text = "❌ กรุณาพิมพ์ตัวอักษรที่ต้องการหาก่อนครับ!"
-            return
-        end
-        
-        ResultLabel.Text = "⏳ กำลังทดสอบเชื่อมต่อ...\nURL: " .. apiUrl
-        
-        apiUrl = apiUrl:match("^%s*(.-)%s*$")
-        if not apiUrl:find("/generate") then
-             if apiUrl:sub(-1) == "/" then
-                 apiUrl = apiUrl .. "generate"
-             else
-                 apiUrl = apiUrl .. "/generate"
-             end
-        end
-
-        -- MODIFIED: Send Used Words via POST for manual test too
-        local excluded = {}
-        for word, _ in pairs(UsedWordsHistory) do
-            if word:sub(1, #letters):lower() == letters:lower() then
-                table.insert(excluded, word)
+        local letters = LetterInput.Text:match("^%s*(.-)%s*$"):lower()
+        if letters == "" then ResultLabel.Text = "❌ กรุณาพิมพ์ตัวอักษรนำหน้า" return end
+        ResultLabel.Text = "⏳ กำลังเรียก OpenRouter...\nModel: " .. OpenRouterModel
+        local words = FetchWordsFromOllama(letters)
+        if words and #words > 0 then
+            local out = "✅ ได้คำ (JSON parsed):\n"
+            for i, word in ipairs(words) do out = out .. i .. ". " .. word .. "\n" end
+            if OpenRouterDebugMode then
+                out = out .. "\nAI CONTENT:\n" .. (OpenRouterLastParsedContent ~= "" and OpenRouterLastParsedContent or "(empty)")
             end
-        end
-
-        local success, response = pcall(function()
-            return request({
-                Url = apiUrl,
-                Method = "POST",
-                Headers = {
-                    ["Content-Type"] = "application/json"
-                },
-                Body = HttpService:JSONEncode({
-                    letters = letters,
-                    excluded = excluded,
-                    hard_mode = isHardMode -- Send Hard Mode flag manually if toggled
-                })
-            })
-        end)
-        
-        if success and response.StatusCode == 200 then
-            local data = HttpService:JSONDecode(response.Body)
-            local outputText = ""
-            
-            if data.status == "success" then
-                for char, words in pairs(data.data) do
-                    outputText = outputText .. "หมวด [" .. char .. "]:\n"
-                    if #words > 0 then
-                        for i, word in ipairs(words) do
-                            outputText = outputText .. "  " .. i .. ". " .. word .. "\n"
-                        end
-                    else
-                        outputText = outputText .. "  (หาไม่เจอ)\n"
-                    end
-                    outputText = outputText .. "\n"
-                end
-                ResultLabel.Text = outputText
-                local _, lineCount = outputText:gsub('\n', '\n')
-                ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, (lineCount + 5) * 18)
-            else
-                ResultLabel.Text = "❌ Server ตอบกลับมาว่า Error"
-            end
+            ResultLabel.Text = out
+            ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, OpenRouterDebugMode and 700 or ((#words + 5) * 20))
         else
-            ResultLabel.Text = "❌ เชื่อมต่อไม่ได้! เช็คลิงก์ใหม่อีกทีครับ\n(Code: " .. tostring(response.StatusCode) .. ")"
-            warn("Connection Failed:", response)
+            local raw = OpenRouterLastRawResponse ~= "" and OpenRouterLastRawResponse or "(ไม่มี raw response)"
+            if #raw > 2500 then raw = raw:sub(1, 2500) .. "..." end
+            ResultLabel.Text = "❌ ไม่พบคำ / API ตอบไม่ถูกต้อง / Key หมด rate limit\n\nRAW RESPONSE:\n" .. raw
+            ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 900)
         end
     end)
 end
-
 --------------------------------------------------------------
 -- 7. SEARCH ALGORITHMS
 --------------------------------------------------------------
@@ -1379,66 +1353,137 @@ local function FetchWordsFromAPI(prefix)
     end
 end
 
-local function FetchWordsFromOllama(prefix)
-    if not prefix or #prefix == 0 then return nil end
-    if not OllamaApiUrl or OllamaApiUrl == "" or OllamaApiUrl == "YOUR_STATIC_API_URL_HERE" then 
-        Rayfield:Notify({Title="Ollama Error", Content="กรุณาใส่ Ollama API URL ในหน้าตั้งค่า", Duration=3})
-        return nil 
-    end
-    
-    local minLen = GetTargetMinLength(prefix)
-    local cleanUrl = OllamaApiUrl:match("^%s*(.-)%s*$")
-    if not cleanUrl:find("/generate") then
-         if cleanUrl:sub(-1) == "/" then cleanUrl = cleanUrl .. "generate"
-         else cleanUrl = cleanUrl .. "/generate" end
-    end
-    
-    -- Gather excluded words (UsedWordsHistory) matching the prefix
+local function GetOpenRouterExcludedWords(prefix)
     local excluded = {}
+    local seen = {}
     for word, _ in pairs(UsedWordsHistory) do
-        if word:sub(1, #prefix):lower() == prefix:lower() then
+        if word:sub(1, #prefix):lower() == prefix:lower() and not seen[word] then
             table.insert(excluded, word)
+            seen[word] = true
+        end
+    end
+    for word, _ in pairs(usedAPIWords) do
+        if word:sub(1, #prefix):lower() == prefix:lower() and not seen[word] then
+            table.insert(excluded, word)
+            seen[word] = true
+        end
+    end
+    return excluded
+end
+
+local function GetNextOpenRouterKey()
+    for _ = 1, OpenRouterKeyCount do
+        openRouterKeyCursor = (openRouterKeyCursor % OpenRouterKeyCount) + 1
+        local key = OpenRouterApiKeys[openRouterKeyCursor]
+        if key and key:match("%S") then return key, openRouterKeyCursor end
+    end
+    return nil, nil
+end
+
+local function ExtractOpenRouterWordsFromParsed(parsed)
+    if type(parsed) ~= "table" then return nil end
+    if type(parsed.words) == "table" then return parsed.words end
+    if type(parsed.data) == "table" then return parsed.data end
+    if type(parsed.result) == "table" then return parsed.result end
+    if #parsed > 0 then return parsed end
+    return nil
+end
+
+FetchWordsFromOllama = function(prefix)
+    if not prefix or #prefix == 0 then return nil end
+    if not request then
+        Rayfield:Notify({Title="OpenRouter Error", Content="Executor นี้ไม่รองรับ request/http_request", Duration=3})
+        return nil
+    end
+
+    local minLen = GetTargetMinLength(prefix)
+    local excluded = GetOpenRouterExcludedWords(prefix)
+    local excludedText = (#excluded > 0) and table.concat(excluded, ", ") or "none"
+    local hardText = isHardMode and "Prefer real English words ending with difficult letters: x, z, q, j, v, k. If impossible, return best valid alternatives." or "Prefer common real English words."
+    local prompt = string.format([[Return ONLY valid minified JSON. Schema: {"words":["word1","word2"]}. Need exactly %d unique real English words that start with "%s", length between %d and %d, lowercase alphabetic a-z only. Do not include these already used words: %s. %s]], OpenRouterWordCount, prefix:lower(), math.max(minLen, #prefix), maxLength, excludedText, hardText)
+
+    OpenRouterLastRawResponse = ""
+    OpenRouterLastParsedContent = ""
+
+    local words = {}
+    for attempt = 1, OpenRouterKeyCount do
+        local apiKey, keyIndex = GetNextOpenRouterKey()
+        if not apiKey then
+            Rayfield:Notify({Title="OpenRouter Error", Content="กรุณาใส่ API Key อย่างน้อย 1 ช่อง", Duration=3})
+            return nil
+        end
+
+        local payload = {
+            model = OpenRouterModel,
+            messages = {
+                {role = "system", content = "You generate word-game answers. Output JSON only. No markdown, no explanation."},
+                {role = "user", content = prompt}
+            },
+            temperature = isHardMode and 0.35 or 0.2,
+            max_tokens = 180
+        }
+
+        local success, response = pcall(function()
+            return request({
+                Url = OpenRouterApiUrl,
+                Method = "POST",
+                Headers = {
+                    ["Content-Type"] = "application/json",
+                    ["Authorization"] = "Bearer " .. apiKey,
+                    ["HTTP-Referer"] = "https://roblox.com",
+                    ["X-Title"] = "999 Word Solver"
+                },
+                Body = HttpService:JSONEncode(payload)
+            })
+        end)
+
+        local statusCode = response and (response.StatusCode or response.Status or response.status_code)
+        local body = response and (response.Body or response.body or "") or tostring(response)
+        OpenRouterLastRawResponse = "KEY #" .. tostring(keyIndex) .. " | HTTP " .. tostring(statusCode) .. "\n" .. tostring(body)
+        if OpenRouterDebugMode then
+            print("========== OPENROUTER RAW ==========")
+            print(OpenRouterLastRawResponse)
+            print("========== OPENROUTER PROMPT ==========")
+            print(prompt)
+        end
+
+        if success and statusCode and statusCode >= 200 and statusCode < 300 then
+            local ok, data = pcall(function() return HttpService:JSONDecode(body) end)
+            if ok and data and data.choices and data.choices[1] and data.choices[1].message then
+                local content = data.choices[1].message.content or ""
+                OpenRouterLastParsedContent = content
+                content = content:gsub("```json", ""):gsub("```", ""):match("^%s*(.-)%s*$") or content
+                local jsonOnly = content:match("({.*})") or content
+                local okJson, parsed = pcall(function() return HttpService:JSONDecode(jsonOnly) end)
+                local rawWords = okJson and ExtractOpenRouterWordsFromParsed(parsed) or nil
+                if rawWords then
+                    local seen = {}
+                    for _, raw in ipairs(rawWords) do
+                        local word = tostring(raw):lower():match("^[a-z]+$")
+                        if word and word:sub(1, #prefix) == prefix:lower() and #word >= minLen and #word <= maxLength and not seen[word] and IsValidWord(word) then
+                            table.insert(words, word)
+                            seen[word] = true
+                            if #words >= OpenRouterWordCount then break end
+                        end
+                    end
+                    if #words > 0 then
+                        lastAPIWords = words
+                        if showApiWordList and UpdateApiWordListGui then UpdateApiWordListGui(words) end
+                        Rayfield:Notify({Title="OpenRouter AI", Content="ใช้ Key #"..tostring(keyIndex).." ได้ "..#words.." คำ", Duration=2})
+                        return words
+                    end
+                elseif OpenRouterDebugMode then
+                    warn("OpenRouter JSON parse failed. AI content: " .. tostring(content))
+                end
+            elseif ok and data and data.error then
+                warn("OpenRouter API error: " .. tostring(data.error.message or data.error))
+            end
+        else
+            warn("OpenRouter key #" .. tostring(keyIndex) .. " failed: " .. tostring(statusCode) .. " " .. tostring(body))
         end
     end
 
-    -- Send POST request with exclusion list AND Hard Mode Flag
-    local success, response = pcall(function()
-        return request({ 
-            Url = cleanUrl, 
-            Method = "POST",
-            Headers = {
-                ["Content-Type"] = "application/json"
-            },
-            Body = HttpService:JSONEncode({
-                letters = prefix,
-                excluded = excluded,
-                hard_mode = isHardMode -- NEW: Pass Hard Mode state to Python
-            })
-        })
-    end)
-    
-    if success and response.StatusCode == 200 then
-        local data = HttpService:JSONDecode(response.Body)
-        local words = {}
-        if data.status == "success" and data.data then
-            for char, list in pairs(data.data) do
-                 for _, w in ipairs(list) do
-                     if #w >= minLen and #w <= maxLength then
-                         local word = w:lower()
-                         if IsValidWord(word) then
-                             table.insert(words, word)
-                         end
-                     end
-                 end
-            end
-        end
-        if #words > 0 then 
-            if showApiWordList and UpdateApiWordListGui then 
-                UpdateApiWordListGui(words) 
-            end
-            return words 
-        end
-    end
+    if showApiWordList and UpdateApiWordListGui then UpdateApiWordListGui({}) end
     return nil
 end
 
@@ -1562,12 +1607,13 @@ local function TryGetWordFromSource(sourceName, prefix)
     elseif sourceName == "API (Datamuse)" then
         local unused = GetUnusedAPIWord()
         if unused then return unused, "api" else return nil end
-    elseif sourceName == "Ollama Model" then
+    elseif sourceName == "OpenRouter AI" then
         local ollamaWords = FetchWordsFromOllama(prefix)
         if ollamaWords and #ollamaWords > 0 then
-            -- Ollama API now handles sorting/hard mode logic on server side
+            -- OpenRouter JSON response is validated and sorted by model preference
             local pick = ollamaWords[1] -- Pick the first one as it's sorted by priority
-            return pick, "qwen_api"
+            usedAPIWords[pick] = true
+            return pick, "openrouter_ai"
         end
         return nil
     elseif sourceName == "Database (Built-in)" then
@@ -2052,14 +2098,14 @@ autoType = function(prefix, fullWord, isAutoMode, source)
         lastTypedOrSentWord = fullWord
         lastTypedOrSentWordTime = tick()
 
-        local badge = ({api="🌐", database="💾", verb_fallback="⚡", custom_db="📂", saved="⭐", qwen_api="🤖"})[source or ""] or ""
+        local badge = ({api="🌐", database="💾", verb_fallback="⚡", custom_db="📂", saved="⭐", openrouter_ai="🤖"})[source or ""] or ""
         local srcName = ({
             api="API", 
             database="Database", 
             verb_fallback="VERB Fallback", 
             saved="Saved Words",
             custom_db="Custom DB",
-            qwen_api="Ollama AI"
+            openrouter_ai="OpenRouter AI"
         })[source or ""] or "?"
         
         Rayfield:Notify({
@@ -2577,29 +2623,80 @@ MainTab:CreateDropdown({
     end,
 })
 
-MainTab:CreateSection("Ollama AI (New!)")
+MainTab:CreateSection("🤖 OpenRouter AI (JSON + Multi Key)")
 MainTab:CreateInput({
-    Name = "🔗 Ollama API URL (Static/Ngrok)",
-    PlaceholderText = "วางลิงก์ API ที่นี่ (เช่น https://...)",
+    Name = "🔑 OpenRouter API Key #1",
+    PlaceholderText = OpenRouterApiKeys[1] ~= "" and "บันทึกแล้ว (ใส่ใหม่เพื่อเปลี่ยน)" or "sk-or-v1-...",
     RemoveTextAfterFocusLost = false,
     Callback = function(text)
         if text and text ~= "" then
-            OllamaApiUrl = text
-            UserConfig.OllamaUrl = text
+            OpenRouterApiKeys[1] = text:match("^%s*(.-)%s*$")
+            UserConfig.OpenRouterApiKey1 = OpenRouterApiKeys[1]
             SaveUserConfig()
-            Rayfield:Notify({Title="บันทึก URL แล้ว", Content="พร้อมใช้งาน Ollama AI", Duration=2})
+            Rayfield:Notify({Title="OpenRouter", Content="บันทึก API Key #1 แล้ว", Duration=2})
         end
     end,
 })
-MainTab:CreateButton({
-    Name = "🤖 เปิดหน้าต่าง Ollama AI (Test UI)",
-    Callback = function()
-        ToggleOllamaGui()
+MainTab:CreateInput({
+    Name = "🔑 OpenRouter API Key #2 (สำรอง)",
+    PlaceholderText = OpenRouterApiKeys[2] ~= "" and "บันทึกแล้ว" or "ไม่บังคับ",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text) if text and text ~= "" then OpenRouterApiKeys[2] = text:match("^%s*(.-)%s*$"); UserConfig.OpenRouterApiKey2 = OpenRouterApiKeys[2]; SaveUserConfig() end end,
+})
+MainTab:CreateInput({
+    Name = "🔑 OpenRouter API Key #3 (สำรอง)",
+    PlaceholderText = OpenRouterApiKeys[3] ~= "" and "บันทึกแล้ว" or "ไม่บังคับ",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text) if text and text ~= "" then OpenRouterApiKeys[3] = text:match("^%s*(.-)%s*$"); UserConfig.OpenRouterApiKey3 = OpenRouterApiKeys[3]; SaveUserConfig() end end,
+})
+MainTab:CreateInput({
+    Name = "🧠 ชื่อโมเดล OpenRouter",
+    PlaceholderText = OpenRouterModel,
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text)
+        if text and text ~= "" then OpenRouterModel = text:match("^%s*(.-)%s*$"); UserConfig.OpenRouterModel = OpenRouterModel; SaveUserConfig() end
     end,
 })
+MainTab:CreateDropdown({
+    Name = "🔁 ใช้กี่ API Key (สลับกันกัน rate limit)",
+    Options = {"1", "2", "3"},
+    CurrentOption = {tostring(OpenRouterKeyCount)},
+    MultipleOptions = false,
+    Flag = "OpenRouterKeyCount",
+    Callback = function(Option) OpenRouterKeyCount = tonumber(Option[1]) or 1; UserConfig.OpenRouterKeyCount = OpenRouterKeyCount; SaveUserConfig() end,
+})
+MainTab:CreateInput({
+    Name = "📦 จำนวนคำที่รับจาก AI ต่อรอบ",
+    PlaceholderText = tostring(OpenRouterWordCount),
+    Callback = function(txt) OpenRouterWordCount = math.clamp(tonumber(txt) or 3, 1, 10); UserConfig.OpenRouterWordCount = OpenRouterWordCount; SaveUserConfig() end,
+})
+MainTab:CreateToggle({
+    Name = "🧪 Debug OpenRouter Raw Response (ดูว่า AI/API ตอบอะไร)",
+    CurrentValue = OpenRouterDebugMode,
+    Flag = "OpenRouterDebugMode",
+    Callback = function(v)
+        OpenRouterDebugMode = v
+        UserConfig.OpenRouterDebugMode = v
+        SaveUserConfig()
+        Rayfield:Notify({Title="OpenRouter Debug", Content=v and "เปิด: raw response จะพิมพ์ใน console และ Test UI" or "ปิด debug แล้ว", Duration=2})
+    end,
+})
+MainTab:CreateButton({
+    Name = "📋 Print Raw Response ล่าสุด (Console)",
+    Callback = function()
+        print("========== LAST OPENROUTER RAW ==========")
+        print(OpenRouterLastRawResponse ~= "" and OpenRouterLastRawResponse or "ยังไม่มี response")
+        print("========== LAST AI CONTENT ==========")
+        print(OpenRouterLastParsedContent ~= "" and OpenRouterLastParsedContent or "ยังไม่มี content")
+    end,
+})
+MainTab:CreateButton({
+    Name = "🤖 เปิดหน้าต่าง OpenRouter Test UI",
+    Callback = function() ToggleOllamaGui() end,
+})
 MainTab:CreateParagraph({
-    Title = "ℹ️ วิธีใช้ Ollama AI",
-    Content = "1. ใส่ลิงก์ Static Ngrok ในช่องด้านบน\n2. เลือก 'Ollama Model' ใน Priority Dropdown เพื่อใช้ออโต้\n3. กดปุ่ม 'เปิดหน้าต่าง' เพื่อทดสอบดึงคำด้วยมือ"
+    Title = "ℹ️ วิธีใช้ OpenRouter AI",
+    Content = "เลือก 'OpenRouter AI' ใน Priority แล้วใส่ API Key/Model ได้เอง\nระบบส่งรายการคำที่ใช้แล้วเป็น excluded เช่น apple เพื่อกัน AI ตอบซ้ำในรอบนั้น และบังคับ JSON เพื่อแยกคำได้ปลอดภัย\nถ้าดึงคำไม่ได้ให้เปิด Debug แล้วกด Test UI เพื่อดู raw response"
 })
 
 MainTab:CreateSection("API MODE ขั้นเทพ")
@@ -2635,7 +2732,7 @@ MainTab:CreateInput({
 })
 
 MainTab:CreateToggle({
-    Name = "🔥 โหมดเลือกคำยาก (Hard Mode: ลงท้าย X, Z, Q, J)",
+    Name = "🔥 โหมดวินเรทสูง (เน้นคำลงท้าย X/Z/Q/J/V/K)",
     CurrentValue = isHardMode,
     Flag = "HardModeToggle",
     Callback = function(val)
@@ -3142,7 +3239,7 @@ Rayfield:Notify({
 
 print("========================================")
 print("999ตัวตึง | ULTIMATE V6.0 - LOADED")
-print("🆕 Ollama AI Integration Active")
+print("🆕 OpenRouter AI Integration Active")
 print("🆕 Priority System Active")
 print("🆕 Other Player Detection Ready")
 print("🆕 Smart Visuals & Auto-Chat Active")
